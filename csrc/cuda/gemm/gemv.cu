@@ -31,9 +31,20 @@ __global__ void gemv_kernel(const __nv_bfloat16* __restrict__ x,
     const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
     const int n = blockIdx.x * GEMV_WPB + warp;
     if (n >= N) return;
-    const __nv_bfloat16* row = W + (size_t)n * K;
+    // 128-bit coalesced loads: each lane pulls a uint4 = 8 bf16 of the weight row.
+    const uint4* row4 = reinterpret_cast<const uint4*>(W + (size_t)n * K);
+    const int n4 = K / 8;
     float acc = 0.f;
-    for (int k = lane; k < K; k += 32) acc += __bfloat162float(row[k]) * s_x[k];
+    for (int i = lane; i < n4; i += 32) {
+        uint4 v = row4[i];
+        const __nv_bfloat162* h2 = reinterpret_cast<const __nv_bfloat162*>(&v);
+        const int base = i * 8;
+        #pragma unroll
+        for (int j = 0; j < 4; j++) {
+            float2 f = __bfloat1622float2(h2[j]);
+            acc += f.x * s_x[base + 2*j] + f.y * s_x[base + 2*j + 1];
+        }
+    }
     #pragma unroll
     for (int m = 16; m > 0; m >>= 1) acc += __shfl_xor_sync(0xffffffff, acc, m);
     if (lane == 0) gemv_write(y + n, acc);
