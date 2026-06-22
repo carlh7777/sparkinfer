@@ -84,6 +84,10 @@ public:
     // Run one token at `position`, return the argmax next-token id.
     int forward_token(int token_id, int position);
 
+    // Copy the most recent step's logits (vocab floats) to host. Valid after a
+    // forward_token() call. Used for teacher-forced scoring (perplexity / KL).
+    void copy_logits(float* host_logits) const;
+
     // Steady-state decode throughput benchmark: runs `warmup` untimed decode
     // steps then times `n_tokens` more. Returns tokens/sec. Requires weights.
     double bench_decode(int warmup, int n_tokens);

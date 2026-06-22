@@ -115,6 +115,12 @@ Qwen35Model::~Qwen35Model() {
 void Qwen35Model::set_weights(const Qwen35Weights& w) { p_->w = w; }
 const Qwen35Config& Qwen35Model::config() const { return p_->cfg; }
 
+void Qwen35Model::copy_logits(float* host_logits) const {
+    // p_->logits holds the last step's lm-head output; forward_token() syncs the
+    // stream before returning, so it is valid to read here.
+    cudaMemcpy(host_logits, p_->logits, (size_t)p_->cfg.vocab * sizeof(float), cudaMemcpyDeviceToHost);
+}
+
 int Qwen35Model::forward_token(int token_id, int position) {
     Impl& s = *p_;
     const Qwen35Config& c = s.cfg;
