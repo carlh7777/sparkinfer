@@ -51,12 +51,16 @@ struct Qwen35LayerWeights {
     // instead of using the bf16 gate/up/down above. *_qtype are ggml type ids.
     const void* gate_q = nullptr; const void* up_q = nullptr; const void* down_q = nullptr;
     int gate_qtype = 0, up_qtype = 0, down_qtype = 0;
+    // attention projections: 0 = bf16 dense (default); else ggml type id (12=Q4_K,
+    // 14=Q6_K) -> weights kept quantized in VRAM, decoded on-read by launch_gemv_q.
+    int wq_type = 0, wk_type = 0, wv_type = 0, wo_type = 0;
 };
 
 struct Qwen35Weights {
     const void* embed_tokens = nullptr;  // [vocab, hidden]
     const void* final_norm   = nullptr;  // [hidden]
     const void* lm_head      = nullptr;  // [hidden, vocab]  (pre-transposed)
+    int lm_head_type = 0;                 // 0 = bf16; else ggml type -> on-read quantized GEMV
     std::vector<Qwen35LayerWeights> layers;
 };
 

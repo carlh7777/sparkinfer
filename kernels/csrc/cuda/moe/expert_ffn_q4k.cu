@@ -39,44 +39,47 @@ __device__ __forceinline__ void q4kf_scale_min(int j, const unsigned char* q, in
     else { *d = (q[j + 4] & 0xF) | ((q[j - 4] >> 6) << 4);
            *m = (q[j + 4] >> 4)  | ((q[j]     >> 6) << 4); }
 }
-__device__ __forceinline__ void warp_deq_q4k(const unsigned char* blk, float* s, int lane) {
-    float d = q4kf_h2f(blk), dmin = q4kf_h2f(blk + 2);
-    const unsigned char* sc = blk + 4; const unsigned char* qs = blk + 16;
-    #pragma unroll
-    for (int g = 0; g < 4; g++) {
-        int s1, m1, s2, m2;
-        q4kf_scale_min(2*g,   sc, &s1, &m1); q4kf_scale_min(2*g+1, sc, &s2, &m2);
-        float d1 = d*s1, mm1 = dmin*m1, d2 = d*s2, mm2 = dmin*m2;
-        const unsigned char* q = qs + g*32;
-        s[g*64 + lane]      = d1 * (q[lane] & 0xF) - mm1;
-        s[g*64 + 32 + lane] = d2 * (q[lane] >> 4)  - mm2;
-    }
-}
-__device__ __forceinline__ void warp_deq_q6k(const unsigned char* blk, float* s, int lane) {
-    const unsigned char* ql = blk; const unsigned char* qh = blk + 128;
-    const signed char* sc = (const signed char*)(blk + 192); float d = q4kf_h2f(blk + 208);
-    #pragma unroll
-    for (int n = 0; n < 2; n++) {
-        const unsigned char* qln = ql + n*64; const unsigned char* qhn = qh + n*32; const signed char* scn = sc + n*8;
-        int l = lane, is = l / 16;
-        int q1 = (int)((qln[l]    & 0xF) | (((qhn[l] >> 0) & 3) << 4)) - 32;
-        int q2 = (int)((qln[l+32] & 0xF) | (((qhn[l] >> 2) & 3) << 4)) - 32;
-        int q3 = (int)((qln[l]    >> 4)  | (((qhn[l] >> 4) & 3) << 4)) - 32;
-        int q4 = (int)((qln[l+32] >> 4)  | (((qhn[l] >> 6) & 3) << 4)) - 32;
-        s[n*128 + l]      = d * scn[is + 0] * q1;
-        s[n*128 + l + 32] = d * scn[is + 2] * q2;
-        s[n*128 + l + 64] = d * scn[is + 4] * q3;
-        s[n*128 + l + 96] = d * scn[is + 6] * q4;
-    }
-}
 __device__ __forceinline__ float q4kf_silu(float x) { return x / (1.f + __expf(-x)); }
+
+// Dequant a 256-block in registers and return THIS lane's partial dot with sx[0..255]
+// (8 weights/lane). No shared round-trip — caller warp-reduces the accumulated partials
+// once at the end. Same math as warp_deq + the shared dot, just fused and register-resident.
+__device__ __forceinline__ float q4kf_deq_dot(int t, const unsigned char* b, const float* sx, int lane) {
+    float p = 0.f;
+    if (t == 14) {   // Q6_K
+        const unsigned char* ql = b; const unsigned char* qh = b + 128;
+        const signed char* sc = (const signed char*)(b + 192); float d = q4kf_h2f(b + 208);
+        #pragma unroll
+        for (int nn = 0; nn < 2; nn++) {
+            const unsigned char* qln = ql + nn*64; const unsigned char* qhn = qh + nn*32; const signed char* scn = sc + nn*8;
+            int is = lane / 16;
+            int q1 = (int)((qln[lane]    & 0xF) | (((qhn[lane] >> 0) & 3) << 4)) - 32;
+            int q2 = (int)((qln[lane+32] & 0xF) | (((qhn[lane] >> 2) & 3) << 4)) - 32;
+            int q3 = (int)((qln[lane]    >> 4)  | (((qhn[lane] >> 4) & 3) << 4)) - 32;
+            int q4 = (int)((qln[lane+32] >> 4)  | (((qhn[lane] >> 6) & 3) << 4)) - 32;
+            p += d * scn[is+0] * q1 * sx[nn*128 + lane];
+            p += d * scn[is+2] * q2 * sx[nn*128 + lane + 32];
+            p += d * scn[is+4] * q3 * sx[nn*128 + lane + 64];
+            p += d * scn[is+6] * q4 * sx[nn*128 + lane + 96];
+        }
+    } else {         // Q4_K
+        float d = q4kf_h2f(b), dmin = q4kf_h2f(b + 2);
+        const unsigned char* sc = b + 4; const unsigned char* qs = b + 16;
+        #pragma unroll
+        for (int g = 0; g < 4; g++) {
+            int s1, m1, s2, m2;
+            q4kf_scale_min(2*g, sc, &s1, &m1); q4kf_scale_min(2*g+1, sc, &s2, &m2);
+            float d1 = d*s1, mm1 = dmin*m1, d2 = d*s2, mm2 = dmin*m2;
+            unsigned char qb = qs[g*32 + lane];
+            p += (d1 * (qb & 0xF) - mm1) * sx[g*64 + lane];
+            p += (d2 * (qb >> 4)  - mm2) * sx[g*64 + 32 + lane];
+        }
+    }
+    return p;
+}
 
 // ggml types: Q4_K=12 (144 B/256), Q6_K=14 (210 B/256). Q4_K_M mixes them per tensor.
 __device__ __forceinline__ int q_block_bytes(int t) { return t == 14 ? 210 : 144; }
-__device__ __forceinline__ void warp_deq(int t, const unsigned char* blk, float* s, int lane) {
-    if (t == 14) warp_deq_q6k(blk, s, lane);
-    else         warp_deq_q4k(blk, s, lane);
-}
 
 // gate_up: h[ts,f] = SiLU(<x, gate[e,f]>) * <x, up[e,f]>.  one warp per f.
 // grid=(num_tokens*top_k, ffn/WPB), block=WPB*32. smem: s_x[hidden] + WPB*256.
@@ -85,10 +88,7 @@ __global__ void gate_up_q4k_kernel(
     const unsigned char* __restrict__ up_q, const int* __restrict__ expert_ids,
     float* __restrict__ h_scratch, int H, int F, int top_k, int gate_type, int up_type
 ) {
-    extern __shared__ float smem[];          // s_x[H]
-    float* s_x = smem;
-    __shared__ float s_deq_all[WPB][256];
-    float* s_deq = s_deq_all[threadIdx.x / 32];
+    extern __shared__ float s_x[];           // s_x[H]
     const int ts = blockIdx.x, tok = ts / top_k;
     const int e = expert_ids[ts];
     for (int i = threadIdx.x; i < H; i += blockDim.x) s_x[i] = __bfloat162float(input[(size_t)tok * H + i]);
@@ -103,17 +103,98 @@ __global__ void gate_up_q4k_kernel(
     const unsigned char* ubase = up_q   + ((size_t)e * F + f) * nblk * ubb;
     float g = 0.f, u = 0.f;
     for (int blk = 0; blk < nblk; blk++) {
-        warp_deq(gate_type, gbase + (size_t)blk * gbb, s_deq, lane); __syncwarp();
-        float p = 0.f;
-        #pragma unroll
-        for (int e8 = 0; e8 < 8; e8++) p += s_deq[lane + e8*32] * s_x[blk*256 + lane + e8*32];
-        g += q4kf_wsum(p); __syncwarp();
-        warp_deq(up_type, ubase + (size_t)blk * ubb, s_deq, lane); __syncwarp();
-        p = 0.f;
-        #pragma unroll
-        for (int e8 = 0; e8 < 8; e8++) p += s_deq[lane + e8*32] * s_x[blk*256 + lane + e8*32];
-        u += q4kf_wsum(p); __syncwarp();
+        const float* sx = s_x + blk * 256;
+        g += q4kf_deq_dot(gate_type, gbase + (size_t)blk * gbb, sx, lane);
+        u += q4kf_deq_dot(up_type,   ubase + (size_t)blk * ubb, sx, lane);
     }
+    g = q4kf_wsum(g); u = q4kf_wsum(u);
+    if (lane == 0) h_scratch[(size_t)ts * F + f] = q4kf_silu(g) * u;
+}
+
+// ---- int8 dp4a MMVQ gate/up (SPARKINFER_MMVQ=1) -------------------------------
+// Same result as gate_up_q4k_kernel but stays in int8: the activation x is
+// quantized to Q8_1 once per token (s_xq8 + per-32-block scale s_xd and the
+// Q8_1 sum term s_xs), and the Q4_K weight nibbles are dp4a'd directly against
+// it — no dequant-to-fp, no shared round-trip. Math is the faithful llama.cpp
+// vec_dot_q4_K_q8_1 identity, derived to match the byte-exact warp_deq_q4k:
+//   <w,a>_sub = d*sc*xd*dp4a(q4, xq8) - dmin*m*(xd*sum xq8).
+// Each lane owns whole 32-sub-blocks (2 of them for H=2048) and reduces once.
+// Assumes Q4_K (ggml type 12) gate+up; launcher falls back otherwise.
+__global__ void gate_up_q4k_mmvq_kernel(
+    const __nv_bfloat16* __restrict__ input, const unsigned char* __restrict__ gate_q,
+    const unsigned char* __restrict__ up_q, const int* __restrict__ expert_ids,
+    float* __restrict__ h_scratch, int H, int F, int top_k
+) {
+    extern __shared__ char smem_mmvq[];
+    float* s_xd = reinterpret_cast<float*>(smem_mmvq);   // [H/32] activation scales
+    float* s_xs = s_xd + (H >> 5);                        // [H/32] Q8_1 sum (d*sum)
+    signed char* s_xq8 = reinterpret_cast<signed char*>(s_xs + (H >> 5)); // [H] int8
+
+    const int ts = blockIdx.x, tok = ts / top_k;
+    const int e = expert_ids[ts];
+    const int warpId = threadIdx.x >> 5;
+    const int lane = threadIdx.x & 31;
+    const int nsb = H >> 5;   // sub-blocks of 32
+
+    // quantize activation -> Q8_1, one 32-block per warp-iteration (lane = element)
+    for (int b = warpId; b < nsb; b += WPB) {
+        float xv = __bfloat162float(input[(size_t)tok * H + b * 32 + lane]);
+        float a = fabsf(xv);
+        #pragma unroll
+        for (int m = 16; m > 0; m >>= 1) a = fmaxf(a, __shfl_xor_sync(0xffffffffu, a, m));
+        float d = a / 127.0f;                                  // faithful to llama Q8_1:
+        int qi = (a == 0.0f) ? 0 : (int)roundf(xv / d);        // roundf(xi/d), not rn(xi*inv)
+        s_xq8[b * 32 + lane] = (signed char)qi;
+        int sm = qi;
+        #pragma unroll
+        for (int m = 16; m > 0; m >>= 1) sm += __shfl_xor_sync(0xffffffffu, sm, m);
+        if (lane == 0) { s_xd[b] = d; s_xs[b] = d * (float)sm; }
+    }
+    __syncthreads();
+
+    const int f = blockIdx.y * WPB + warpId;
+    if (f >= F) return;
+    const int nsuper = H >> 8;   // super-blocks of 256
+    const unsigned char* gbase = gate_q + ((size_t)e * F + f) * nsuper * 144;
+    const unsigned char* ubase = up_q   + ((size_t)e * F + f) * nsuper * 144;
+
+    float acc_g = 0.f, acc_u = 0.f;
+    for (int sb = lane; sb < nsb; sb += 32) {
+        const int super = sb >> 3, sib = sb & 7;
+        const int* aint = reinterpret_cast<const int*>(s_xq8 + (sb << 5));
+        const float xd = s_xd[sb], xs = s_xs[sb];
+        const int boff = (sib >> 1) * 32;     // quant byte group within super-block
+        const bool hi = sib & 1;
+        // gate
+        {
+            const unsigned char* blk = gbase + (size_t)super * 144;
+            float d = q4kf_h2f(blk), dmin = q4kf_h2f(blk + 2);
+            int scd, scm; q4kf_scale_min(sib, blk + 4, &scd, &scm);
+            const int* q = reinterpret_cast<const int*>(blk + 16 + boff);
+            int sumi = 0;
+            #pragma unroll
+            for (int k = 0; k < 8; k++) {
+                int w = hi ? ((q[k] >> 4) & 0x0F0F0F0F) : (q[k] & 0x0F0F0F0F);
+                sumi = __dp4a(w, aint[k], sumi);
+            }
+            acc_g += d * (float)scd * xd * (float)sumi - dmin * (float)scm * xs;
+        }
+        // up
+        {
+            const unsigned char* blk = ubase + (size_t)super * 144;
+            float d = q4kf_h2f(blk), dmin = q4kf_h2f(blk + 2);
+            int scd, scm; q4kf_scale_min(sib, blk + 4, &scd, &scm);
+            const int* q = reinterpret_cast<const int*>(blk + 16 + boff);
+            int sumi = 0;
+            #pragma unroll
+            for (int k = 0; k < 8; k++) {
+                int w = hi ? ((q[k] >> 4) & 0x0F0F0F0F) : (q[k] & 0x0F0F0F0F);
+                sumi = __dp4a(w, aint[k], sumi);
+            }
+            acc_u += d * (float)scd * xd * (float)sumi - dmin * (float)scm * xs;
+        }
+    }
+    float g = q4kf_wsum(acc_g), u = q4kf_wsum(acc_u);
     if (lane == 0) h_scratch[(size_t)ts * F + f] = q4kf_silu(g) * u;
 }
 
@@ -125,8 +206,6 @@ __global__ void down_q6k_kernel(
     const float* __restrict__ expert_weights, const float* __restrict__ h_scratch,
     __nv_bfloat16* __restrict__ output, int H, int F, int top_k, int down_type
 ) {
-    __shared__ float s_deq_all[WPB][256];
-    float* s_deq = s_deq_all[threadIdx.x / 32];
     const int token = blockIdx.x;
     const int lane = threadIdx.x % 32;
     const int hh = blockIdx.y * WPB + (threadIdx.x / 32);
@@ -134,28 +213,23 @@ __global__ void down_q6k_kernel(
     const int nblk = F / 256;
     const int dbb = q_block_bytes(down_type);
 
-    float acc = 0.f;
+    float acc = 0.f;   // sum_j w_j * <h_j, down[e_j, hh]> ; fold w into the per-lane partials
     for (int j = 0; j < top_k; j++) {
         const int ts = token * top_k + j;
         const int e = expert_ids[ts];
         const float w = expert_weights[ts];
         const unsigned char* dbase = down_q + ((size_t)e * H + hh) * nblk * dbb;
-        float y = 0.f;
-        for (int blk = 0; blk < nblk; blk++) {
-            warp_deq(down_type, dbase + (size_t)blk * dbb, s_deq, lane); __syncwarp();
-            float p = 0.f;
-            #pragma unroll
-            for (int e8 = 0; e8 < 8; e8++)
-                p += s_deq[lane + e8*32] * h_scratch[(size_t)ts * F + blk*256 + lane + e8*32];
-            y += q4kf_wsum(p); __syncwarp();
-        }
-        acc += w * y;
+        const float* hbase = h_scratch + (size_t)ts * F;
+        for (int blk = 0; blk < nblk; blk++)
+            acc += w * q4kf_deq_dot(down_type, dbase + (size_t)blk * dbb, hbase + blk*256, lane);
     }
+    acc = q4kf_wsum(acc);
     if (lane == 0) output[(size_t)token * H + hh] = __float2bfloat16(acc);
 }
 
 #ifndef SPARKINFER_NVRTC_DEVICE_ONLY
 #include "sparkinfer/kernels/moe.h"
+#include <cstdlib>
 
 void launch_moe_expert_ffn_q4k(
     const void* input, const void* gate_q, const void* up_q, const void* down_q,
@@ -165,13 +239,27 @@ void launch_moe_expert_ffn_q4k(
     int num_tokens, int top_k, int hidden, int ffn, cudaStream_t stream
 ) {
     (void)out_scratch;
+    // SPARKINFER_MMVQ=1 selects the int8 dp4a path for Q4_K gate/up (decode parity
+    // with llama.cpp's MMVQ). bf16 dequant-GEMV stays the default; down is unchanged.
+    static int mmvq = -1;
+    if (mmvq < 0) { const char* ev = getenv("SPARKINFER_MMVQ"); mmvq = (ev && ev[0] == '1') ? 1 : 0; }
+
     dim3 gu(num_tokens * top_k, (ffn + WPB - 1) / WPB);
-    size_t gu_smem = (size_t)hidden * sizeof(float);   // s_x only; s_deq is static
-    gate_up_q4k_kernel<<<gu, WPB * 32, gu_smem, stream>>>(
-        reinterpret_cast<const __nv_bfloat16*>(input),
-        reinterpret_cast<const unsigned char*>(gate_q),
-        reinterpret_cast<const unsigned char*>(up_q),
-        expert_ids, h_scratch, hidden, ffn, top_k, gate_type, up_type);
+    if (mmvq && gate_type == 12 && up_type == 12) {   // 12 = ggml Q4_K
+        size_t sm = 2 * (size_t)(hidden >> 5) * sizeof(float) + (size_t)hidden;  // s_xd+s_xs+s_xq8
+        gate_up_q4k_mmvq_kernel<<<gu, WPB * 32, sm, stream>>>(
+            reinterpret_cast<const __nv_bfloat16*>(input),
+            reinterpret_cast<const unsigned char*>(gate_q),
+            reinterpret_cast<const unsigned char*>(up_q),
+            expert_ids, h_scratch, hidden, ffn, top_k);
+    } else {
+        size_t gu_smem = (size_t)hidden * sizeof(float);   // s_x only; s_deq is static
+        gate_up_q4k_kernel<<<gu, WPB * 32, gu_smem, stream>>>(
+            reinterpret_cast<const __nv_bfloat16*>(input),
+            reinterpret_cast<const unsigned char*>(gate_q),
+            reinterpret_cast<const unsigned char*>(up_q),
+            expert_ids, h_scratch, hidden, ffn, top_k, gate_type, up_type);
+    }
 
     dim3 dn(num_tokens, (hidden + WPB - 1) / WPB);
     down_q6k_kernel<<<dn, WPB * 32, 0, stream>>>(
