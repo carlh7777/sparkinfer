@@ -281,5 +281,13 @@ window.SPARKINFER = {
       "delta_pct": 14.5,
       "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/8"
     }
+  ],
+  "landed": [
+    {
+      "name": "PDL decode",
+      "tps": 187.61,
+      "pr": 8,
+      "date": "2026-06-24"
+    }
   ]
 };

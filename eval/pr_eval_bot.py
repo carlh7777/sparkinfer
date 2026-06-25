@@ -258,6 +258,12 @@ def update_dashboard(repo, pr, areas, res):
         # manual seed the bot never touched).
         if res.get("top1") is not None: data["status"]["token_match"] = round(res["top1"], 4)
         if res.get("kl") is not None:   data["status"]["kl"] = round(res["kl"], 4)
+        # Record the landed optimization for the journey chart (live continuation of `passes`).
+        short = re.sub(r"^\w+(\([^)]*\))?:\s*", "", pr.get("title", ""))[:28]   # strip "area(x): " prefix
+        landed = [m for m in data.get("landed", []) if m.get("pr") != num]      # dedupe by PR
+        landed.append({"name": short or f"PR #{num}", "tps": round(res["tps"], 2),
+                       "pr": num, "date": datetime.date.today().isoformat()})
+        data["landed"] = sorted(landed, key=lambda m: m["tps"])
     data["updated"] = datetime.date.today().isoformat()
     write_dash(data)
     push_dash(f"dashboard: PR #{num} -> eval:{res.get('label')} ({res.get('tps')} tok/s)")
