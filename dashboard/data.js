@@ -105,6 +105,17 @@ window.SPARKINFER = {
   ],
   "prs": [
     {
+      "num": 19,
+      "title": "moe/engine: guard forward() against num_tokens exceeding scratch capacity",
+      "areas": [
+        "moe"
+      ],
+      "label": "none",
+      "tps": 186.29,
+      "delta_pct": null,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/19"
+    },
+    {
       "num": 20,
       "title": "fix(runtime): reject unsupported GGML types during GGUF load",
       "areas": [
