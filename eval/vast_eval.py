@@ -41,7 +41,7 @@ SKIP_HOSTS_PERMANENT = set(filter(None, os.environ.get("VAST_SKIP_HOSTS", _DEFAU
 # --pinned: reuse a stable, known-good box (cached model, good download speed) as the default and
 # NEVER destroy it. If it can't be brought up within --reuse-timeout (5 min), don't provision a new
 # box immediately — leave the pinned box intact and exit PINNED_RETRY_RC so the next scheduled run
-# (~30 min later) retries. Only after REUSE_MAX_RETRIES consecutive misses do we provision a fresh
+# (on the next scheduled run) retries. Only after REUSE_MAX_RETRIES consecutive misses do we provision a fresh
 # box (the pinned one is still kept). Counter persists in REUSE_RETRY_FILE across runs.
 REUSE_RETRY_FILE = os.path.expanduser(os.environ.get("VAST_REUSE_RETRY_FILE", "~/.sparkinfer_reuse_retries"))
 REUSE_MAX_RETRIES = int(os.environ.get("VAST_REUSE_MAX_RETRIES", "2"))
@@ -234,7 +234,7 @@ def main():
                 if n <= REUSE_MAX_RETRIES:
                     _set_reuse_retries(n)
                     print(f">> pinned instance {iid} exists but not SSH-ready within {args.reuse_timeout}s "
-                          f"(miss {n}/{REUSE_MAX_RETRIES}) — leaving it intact; retry on the next run (~30 min).")
+                          f"(miss {n}/{REUSE_MAX_RETRIES}) — leaving it intact; retry on the next scheduled run.")
                     sys.exit(PINNED_RETRY_RC)
                 _set_reuse_retries(0)
                 print(f">> pinned instance {iid} unavailable after {REUSE_MAX_RETRIES} retries — "

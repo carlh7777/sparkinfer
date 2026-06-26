@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cron wrapper for the sparkinfer PR auto-eval bot — gives cron a sane env, refreshes the
-# evaluator from main, and runs one poll. Schedule it every 30 min:
+# evaluator from main, and runs one poll. Schedule it every 2 hours:
 #
-#   */30 * * * * /home/speedy/gittensor-ai-lab/sparkinfer/eval/run_bot_cron.sh >> /tmp/sparkinfer_bot.log 2>&1
+#   0 */2 * * * /home/speedy/gittensor-ai-lab/sparkinfer/eval/run_bot_cron.sh >> /tmp/sparkinfer_bot.log 2>&1
 #
 # Override params via env (or edit the defaults):  VAST_INSTANCE, FRONTIER, CEILING, REPO.
 export HOME="${HOME:-/home/speedy}"

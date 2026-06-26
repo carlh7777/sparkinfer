@@ -27,7 +27,7 @@ def current_instance(default):
 
 # Pinned default box: a stable, known-good instance (cached model, good download speed) that we
 # reuse first on every run and NEVER destroy. vast_eval.py is invoked with --pinned for it, so on
-# bring-up failure it retries on later runs (~30 min apart) instead of provisioning immediately;
+# bring-up failure it retries on later scheduled runs instead of provisioning immediately;
 # only after VAST_REUSE_MAX_RETRIES misses does it spin up a new box (the pinned one is kept).
 # Set VAST_DEFAULT_INSTANCE="" to disable the pin and always provision fresh.
 # The pin id lives in a file so it can self-heal: when the pinned box is reclaimed and the eval
@@ -512,7 +512,7 @@ def main():
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=14400)
         if r.returncode == PINNED_RETRY_RC:
             tail = next((l for l in reversed((r.stdout + r.stderr).splitlines()) if l.strip()), "")
-            print(f">> {tail}\n>> aborting this run — the next scheduled run (~30 min) retries the "
+            print(f">> {tail}\n>> aborting this run — the next scheduled run retries the "
                   f"pinned box. No PRs evaluated this tick."); return
         # If vast_eval self-healed/fell back to a new instance, track the new id for the next PR.
         for l in r.stdout.splitlines():
