@@ -84,6 +84,21 @@ window.SPARKINFER = {
   ],
   "prs": [
     {
+      "num": 87,
+      "title": "perf(attn): fuse Q/K/V Q4_K MMVQ into one launch (+3% decode)",
+      "areas": [
+        "kernels",
+        "runtime"
+      ],
+      "label": "none",
+      "tps": 437.3,
+      "delta_pct": 0.2,
+      "top1": 0.97,
+      "kl": 0.1417,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/87",
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0087-b7562da"
+    },
+    {
       "num": 86,
       "title": "perf(decode): single-pass MoE top-k + fused RoPE/KV-append (+3.2% decode)",
       "areas": [
@@ -125,21 +140,6 @@ window.SPARKINFER = {
       "kl": 0.1417,
       "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/51",
       "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0051-d7824bf"
-    },
-    {
-      "num": 87,
-      "title": "perf(attn): fuse Q/K/V Q4_K MMVQ into one launch (+3% decode)",
-      "areas": [
-        "kernels",
-        "runtime"
-      ],
-      "label": "S",
-      "tps": 408.73,
-      "delta_pct": 3.7,
-      "top1": 0.97,
-      "kl": 0.1417,
-      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/87",
-      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0087-0fb1fe1"
     },
     {
       "num": 83,
