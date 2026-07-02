@@ -114,6 +114,27 @@ window.SPARKINFER = {
   ],
   "prs": [
     {
+      "num": 125,
+      "title": "perf(attn): bf16 GQA smem tile + scale combine warps at 256 splits",
+      "areas": [
+        "kernels"
+      ],
+      "label": "none",
+      "tps": 245.25,
+      "delta_pct": -1.3,
+      "top1": 0.9702,
+      "kl": 0.0181,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/125",
+      "eval_mode": "longctx",
+      "score_context": 16384,
+      "ctx_2048_tps": 279.42,
+      "ctx_16384_tps": 245.25,
+      "guard_2k_baseline": 279.56,
+      "guard_2k_ratio": 0.9995,
+      "guard_2k_pass": true,
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0125-581a587"
+    },
+    {
       "num": 126,
       "title": "perf(attn): bf16 GQA tile12 + adaptive combine for 16k n_splits=256",
       "areas": [
@@ -133,27 +154,6 @@ window.SPARKINFER = {
       "guard_2k_ratio": 0.9981,
       "guard_2k_pass": true,
       "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0126-948a288"
-    },
-    {
-      "num": 125,
-      "title": "perf(attn): bf16 GQA smem tile + scale combine warps at 256 splits",
-      "areas": [
-        "kernels"
-      ],
-      "label": "XS",
-      "tps": 248.32,
-      "delta_pct": 3.2,
-      "top1": 0.9861,
-      "kl": 0.0149,
-      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/125",
-      "eval_mode": "longctx",
-      "score_context": 16384,
-      "ctx_2048_tps": 279.23,
-      "ctx_16384_tps": 248.32,
-      "guard_2k_baseline": 279.82,
-      "guard_2k_ratio": 0.9979,
-      "guard_2k_pass": true,
-      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0125-5c9afac"
     },
     {
       "num": 124,
