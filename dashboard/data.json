@@ -3,12 +3,12 @@
   "status": {
     "gpu": "RTX 5090 · sm_120 · CUDA 13",
     "model": "Qwen3-30B-A3B · Q4_K_M",
-    "frontier_tps": 453.7,
+    "frontier_tps": 469.13,
     "ref_name": "llama.cpp",
     "ref_tps": 365.85,
     "vram_gb": 21.4,
-    "token_match": 0.97,
-    "kl": 0.1417,
+    "token_match": 0.9753,
+    "kl": 0.0126,
     "ref_note": "128-tok decode, same RTX 5090 (warm, interleaved head-to-head)"
   },
   "passes_gpu": "RTX 5090",
@@ -804,6 +804,12 @@
       "tps": 453.7,
       "pr": 86,
       "date": "2026-06-29"
+    },
+    {
+      "name": "fuse QK-norm+RoPE+KV-append ",
+      "tps": 469.13,
+      "pr": 122,
+      "date": "2026-07-02"
     }
   ]
 }
