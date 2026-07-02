@@ -82,8 +82,9 @@ frozen reference, validated on both basket models (Qwen + Gemma). See
 
 Open a PR and a bot evaluates it automatically (polls every ~30 min). For each new commit it
 builds your branch **from source** on an RTX 5090, gates **correctness** (token-match / KL vs
-llama.cpp), checks that **128-token and 512-context decode do not regress**, scores
-**16k-context decode speed**, and posts a comment with an **`eval:<label>`** verdict:
+llama.cpp), checks that **128-token, 512-context, 4k-context, and 16k-context decode do not
+regress**, scores the **strongest verified context improvement**, and posts a comment with an
+**`eval:<label>`** verdict plus a UI-only context label such as `4k-context`:
 
 | label | meaning |
 |---|---|

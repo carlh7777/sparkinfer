@@ -48,16 +48,26 @@ EVAL_MODE="${SPARKINFER_EVAL_MODE:-longctx}"
 SCORE_CTX="${SPARKINFER_SCORE_CTX:-16384}"
 GUARD_CTX="${SPARKINFER_GUARD_CTX:-0}"
 GUARD_512_CTX="${SPARKINFER_GUARD_512_CTX:-512}"
+GUARD_4K_CTX="${SPARKINFER_GUARD_4K_CTX:-4096}"
 REPORT_CTX="${SPARKINFER_REPORT_CTX:-32768}"
 DECODE_TOKENS="${SPARKINFER_DECODE_TOKENS:-128}"
 SCORE_REPS="${SPARKINFER_SCORE_REPS:-3}"
 GUARD_REPS="${SPARKINFER_GUARD_REPS:-1}"
 GUARD_512_REPS="${SPARKINFER_GUARD_512_REPS:-1}"
+GUARD_4K_REPS="${SPARKINFER_GUARD_4K_REPS:-1}"
 REPORT_REPS="${SPARKINFER_REPORT_REPS:-0}"
 GUARD_BASELINE="${SPARKINFER_GUARD_128_BASELINE:-${SPARKINFER_GUARD_2K_BASELINE:-0}}"
 GUARD_512_BASELINE="${SPARKINFER_GUARD_512_BASELINE:-0}"
+GUARD_4K_BASELINE="${SPARKINFER_GUARD_4K_BASELINE:-0}"
+GUARD_16K_BASELINE="${SPARKINFER_GUARD_16K_BASELINE:-0}"
 GUARD_TOL="${SPARKINFER_GUARD_128_TOL:-${SPARKINFER_GUARD_2K_TOL:-0.98}}"
 GUARD_512_TOL="${SPARKINFER_GUARD_512_TOL:-$GUARD_TOL}"
+GUARD_4K_TOL="${SPARKINFER_GUARD_4K_TOL:-$GUARD_TOL}"
+GUARD_16K_TOL="${SPARKINFER_GUARD_16K_TOL:-$GUARD_TOL}"
+LLAMA_128_BASELINE="${SPARKINFER_LLAMA_128_BASELINE:-365.85}"
+LLAMA_512_BASELINE="${SPARKINFER_LLAMA_512_BASELINE:-342.59}"
+LLAMA_4K_BASELINE="${SPARKINFER_LLAMA_4K_BASELINE:-292.99}"
+LLAMA_16K_BASELINE="${SPARKINFER_LLAMA_16K_BASELINE:-245.53}"
 
 echo ">> [2/3] speed — ${EVAL_MODE} decode benchmark ..." >&2
 # M1: pin the GPU clock so the absolute tok/s is reproducible (not just same-box-cancelled). Best-
@@ -82,18 +92,22 @@ median_ctx() {  # $1=context tokens, $2=repetitions
 if [ "$EVAL_MODE" = "short" ]; then
   si_run qwen3_gguf_bench "$GGUF" 192 0 >/dev/null 2>&1 || true
   TPS="$(median_ctx 0 3)"
-  GUARD_TPS=0; GUARD_512_TPS=0; REPORT_TPS=0
-  GUARD_PASS=true; GUARD_512_PASS=true
-  GUARD_RATIO=0; GUARD_512_RATIO=0
+  GUARD_TPS=0; GUARD_512_TPS=0; GUARD_4K_TPS=0; REPORT_TPS=0
+  GUARD_PASS=true; GUARD_512_PASS=true; GUARD_4K_PASS=true; GUARD_16K_PASS=true; ALL_GUARDS_PASS=true
+  GUARD_RATIO=0; GUARD_512_RATIO=0; GUARD_4K_RATIO=0; GUARD_16K_RATIO=0
+  SELECTED_TPS="$TPS"; SELECTED_FRONTIER="$FRONTIER"; SELECTED_CTX=128
+  SELECTED_CONTEXT_LABEL="128-context"; BEST_CONTEXT_LABEL="128-context"; SELECTED_LLAMA_REF="$LLAMA_128_BASELINE"
+  CONTEXT_GAINS_JSON='{}'
 else
   if [ "$REPORT_REPS" -gt 0 ]; then
-    echo ">> long-context policy: ${DECODE_TOKENS}-token decode no-regression gates at ${GUARD_CTX}/${GUARD_512_CTX} ctx; ${SCORE_CTX} ctx scored; ${REPORT_CTX} ctx telemetry" >&2
+    echo ">> context policy: ${DECODE_TOKENS}-token decode at 128/512/4k/16k; all contexts guarded; best context scores; ${REPORT_CTX} ctx telemetry" >&2
   else
-    echo ">> long-context policy: ${DECODE_TOKENS}-token decode no-regression gates at ${GUARD_CTX}/${GUARD_512_CTX} ctx; ${SCORE_CTX} ctx scored; telemetry disabled" >&2
+    echo ">> context policy: ${DECODE_TOKENS}-token decode at 128/512/4k/16k; all contexts guarded; telemetry disabled" >&2
   fi
   si_run qwen3_gguf_bench "$GGUF" 64 "$GUARD_CTX" >/dev/null 2>&1 || true
   GUARD_TPS="$(median_ctx "$GUARD_CTX" "$GUARD_REPS")"
   GUARD_512_TPS="$(median_ctx "$GUARD_512_CTX" "$GUARD_512_REPS")"
+  GUARD_4K_TPS="$(median_ctx "$GUARD_4K_CTX" "$GUARD_4K_REPS")"
   TPS="$(median_ctx "$SCORE_CTX" "$SCORE_REPS")"
   if [ "$REPORT_REPS" -gt 0 ]; then
     REPORT_TPS="$(median_ctx "$REPORT_CTX" "$REPORT_REPS")"
@@ -112,6 +126,18 @@ cur=float("$GUARD_512_TPS")
 print(0 if base <= 0 else cur / base)
 PY
 )"
+  GUARD_4K_RATIO="$(python3 - <<PY
+base=float("$GUARD_4K_BASELINE")
+cur=float("$GUARD_4K_TPS")
+print(0 if base <= 0 else cur / base)
+PY
+)"
+  GUARD_16K_RATIO="$(python3 - <<PY
+base=float("$GUARD_16K_BASELINE")
+cur=float("$TPS")
+print(0 if base <= 0 else cur / base)
+PY
+)"
   GUARD_PASS="$(python3 - <<PY
 base=float("$GUARD_BASELINE")
 cur=float("$GUARD_TPS")
@@ -124,6 +150,70 @@ base=float("$GUARD_512_BASELINE")
 cur=float("$GUARD_512_TPS")
 tol=float("$GUARD_512_TOL")
 print("true" if base <= 0 or cur >= base * tol else "false")
+PY
+)"
+  GUARD_4K_PASS="$(python3 - <<PY
+base=float("$GUARD_4K_BASELINE")
+cur=float("$GUARD_4K_TPS")
+tol=float("$GUARD_4K_TOL")
+print("true" if base <= 0 or cur >= base * tol else "false")
+PY
+)"
+  GUARD_16K_PASS="$(python3 - <<PY
+base=float("$GUARD_16K_BASELINE")
+cur=float("$TPS")
+tol=float("$GUARD_16K_TOL")
+print("true" if base <= 0 or cur >= base * tol else "false")
+PY
+)"
+  SCORE_SELECT="$(python3 - <<PY
+import json
+contexts = [
+  {"ctx":128, "label":"128-context", "tps":float("$GUARD_TPS"), "base":float("$GUARD_BASELINE"), "llama":float("$LLAMA_128_BASELINE")},
+  {"ctx":512, "label":"512-context", "tps":float("$GUARD_512_TPS"), "base":float("$GUARD_512_BASELINE"), "llama":float("$LLAMA_512_BASELINE")},
+  {"ctx":4096, "label":"4k-context", "tps":float("$GUARD_4K_TPS"), "base":float("$GUARD_4K_BASELINE"), "llama":float("$LLAMA_4K_BASELINE")},
+  {"ctx":16384, "label":"16k-context", "tps":float("$TPS"), "base":float("$GUARD_16K_BASELINE") or float("$FRONTIER"), "llama":float("$LLAMA_16K_BASELINE")},
+]
+for c in contexts:
+    c["gain"] = 0.0 if c["base"] <= 0 else (c["tps"] - c["base"]) / c["base"]
+scorable = [c for c in contexts if c["base"] > 0]
+chosen = max(scorable, key=lambda c: c["gain"]) if scorable else next(c for c in contexts if c["ctx"] == int("$SCORE_CTX"))
+print(json.dumps({"chosen": chosen, "contexts": contexts}, separators=(",", ":")))
+PY
+)"
+  SELECTED_TPS="$(SCORE_SELECT="$SCORE_SELECT" python3 - <<'PY'
+import json, os
+print(json.loads(os.environ["SCORE_SELECT"])["chosen"]["tps"])
+PY
+)"
+  SELECTED_FRONTIER="$(SCORE_SELECT="$SCORE_SELECT" python3 - <<'PY'
+import json, os
+print(json.loads(os.environ["SCORE_SELECT"])["chosen"]["base"])
+PY
+)"
+  SELECTED_CTX="$(SCORE_SELECT="$SCORE_SELECT" python3 - <<'PY'
+import json, os
+print(json.loads(os.environ["SCORE_SELECT"])["chosen"]["ctx"])
+PY
+)"
+  SELECTED_CONTEXT_LABEL="$(SCORE_SELECT="$SCORE_SELECT" python3 - <<'PY'
+import json, os
+print(json.loads(os.environ["SCORE_SELECT"])["chosen"]["label"])
+PY
+)"
+  BEST_CONTEXT_LABEL="$SELECTED_CONTEXT_LABEL"
+  SELECTED_LLAMA_REF="$(SCORE_SELECT="$SCORE_SELECT" python3 - <<'PY'
+import json, os
+print(json.loads(os.environ["SCORE_SELECT"])["chosen"]["llama"])
+PY
+)"
+  CONTEXT_GAINS_JSON="$(SCORE_SELECT="$SCORE_SELECT" python3 - <<'PY'
+import json, os
+print(json.dumps({c["label"]: round(100*c["gain"], 2) for c in json.loads(os.environ["SCORE_SELECT"])["contexts"]}, separators=(",", ":")))
+PY
+)"
+  ALL_GUARDS_PASS="$(python3 - <<PY
+print("true" if all(x == "true" for x in ["$GUARD_PASS", "$GUARD_512_PASS", "$GUARD_4K_PASS", "$GUARD_16K_PASS"]) else "false")
 PY
 )"
 fi
@@ -149,8 +239,8 @@ TOP1="${TOP1:-0}"; KL="${KL:-99}"
 [ "$GPU_CLOCKS_PINNED" = 1 ] && CP=true || CP=false
 [ -n "${MODEL_SHA256:-}" ] && MP=true || MP=false
 PROV="$(python3 - <<PY
-import json
-score_ctx = 128 if "$EVAL_MODE" == "short" else int("$SCORE_CTX")
+import json, os
+score_ctx = 128 if "$EVAL_MODE" == "short" else int("$SELECTED_CTX")
 guard_ctx = 0 if "$EVAL_MODE" == "short" else int("$GUARD_CTX")
 report_reps = int("$REPORT_REPS")
 report_ctx = 0 if "$EVAL_MODE" == "short" or report_reps <= 0 else int("$REPORT_CTX")
@@ -165,12 +255,15 @@ data = {
   "eval_mode": "$EVAL_MODE",
   "decode_tokens": int("$DECODE_TOKENS"),
   "score_context": score_ctx,
+  "best_context_label": "$BEST_CONTEXT_LABEL",
+  "context_gains_pct": json.loads('''$CONTEXT_GAINS_JSON'''),
 }
 if "$EVAL_MODE" != "short":
   data.update({
     "guard_context": guard_ctx,
     "ctx_128_tps": round(float("$GUARD_TPS"), 2),
     "ctx_512_tps": round(float("$GUARD_512_TPS"), 2),
+    "ctx_4096_tps": round(float("$GUARD_4K_TPS"), 2),
     "ctx_16384_tps": round(float("$TPS"), 2),
     "guard_128_baseline": round(float("$GUARD_BASELINE"), 2),
     "guard_128_ratio": round(float("$GUARD_RATIO"), 4),
@@ -180,6 +273,14 @@ if "$EVAL_MODE" != "short":
     "guard_512_ratio": round(float("$GUARD_512_RATIO"), 4),
     "guard_512_tol": float("$GUARD_512_TOL"),
     "guard_512_pass": "$GUARD_512_PASS" == "true",
+    "guard_4k_baseline": round(float("$GUARD_4K_BASELINE"), 2),
+    "guard_4k_ratio": round(float("$GUARD_4K_RATIO"), 4),
+    "guard_4k_tol": float("$GUARD_4K_TOL"),
+    "guard_4k_pass": "$GUARD_4K_PASS" == "true",
+    "guard_16k_baseline": round(float("$GUARD_16K_BASELINE"), 2),
+    "guard_16k_ratio": round(float("$GUARD_16K_RATIO"), 4),
+    "guard_16k_tol": float("$GUARD_16K_TOL"),
+    "guard_16k_pass": "$GUARD_16K_PASS" == "true",
   })
   if report_reps > 0:
     data["report_context"] = report_ctx
@@ -187,17 +288,23 @@ if "$EVAL_MODE" != "short":
 print(json.dumps(data, separators=(",", ":")))
 PY
 )"
-if [ "$EVAL_MODE" != "short" ] && { [ "$GUARD_PASS" != "true" ] || [ "$GUARD_512_PASS" != "true" ]; }; then
+if [ "$EVAL_MODE" != "short" ] && [ "$ALL_GUARDS_PASS" != "true" ]; then
   PROV="$PROV" python3 - <<PY
 import json, os
-tps=float("$TPS"); frontier=float("$FRONTIER"); guard=float("$GUARD_TPS")
+tps=float("$SELECTED_TPS"); frontier=float("$SELECTED_FRONTIER"); guard=float("$GUARD_TPS")
 base=float("$GUARD_BASELINE"); tol=float("$GUARD_TOL")
 guard512=float("$GUARD_512_TPS"); base512=float("$GUARD_512_BASELINE"); tol512=float("$GUARD_512_TOL")
+guard4k=float("$GUARD_4K_TPS"); base4k=float("$GUARD_4K_BASELINE"); tol4k=float("$GUARD_4K_TOL")
+guard16k=float("$TPS"); base16k=float("$GUARD_16K_BASELINE"); tol16k=float("$GUARD_16K_TOL")
 reasons = []
 if base > 0 and guard < base * tol:
     reasons.append(f"128-token decode no-regression gate: {guard:.2f} tok/s < {tol:.0%} of main {base:.2f} tok/s")
 if base512 > 0 and guard512 < base512 * tol512:
     reasons.append(f"512-context decode no-regression gate: {guard512:.2f} tok/s < {tol512:.0%} of main {base512:.2f} tok/s")
+if base4k > 0 and guard4k < base4k * tol4k:
+    reasons.append(f"4k-context decode no-regression gate: {guard4k:.2f} tok/s < {tol4k:.0%} of main {base4k:.2f} tok/s")
+if base16k > 0 and guard16k < base16k * tol16k:
+    reasons.append(f"16k-context decode no-regression gate: {guard16k:.2f} tok/s < {tol16k:.0%} of main {base16k:.2f} tok/s")
 res = {
   "commit": "$COMMIT",
   "tps": round(tps, 2),
@@ -216,4 +323,4 @@ print("RESULT_JSON " + json.dumps(res))
 PY
   exit 0
 fi
-python3 "$HERE/label.py" "$TPS" "$FRONTIER" "$CEILING" "$TOP1" "$KL" "$COMMIT" "$PROV"
+SPARKINFER_DIFFICULTY_REF="$SELECTED_LLAMA_REF" python3 "$HERE/label.py" "$SELECTED_TPS" "$SELECTED_FRONTIER" "$CEILING" "$TOP1" "$KL" "$COMMIT" "$PROV"

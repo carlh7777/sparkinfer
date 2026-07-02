@@ -5,7 +5,7 @@ Provision (or reuse) a Blackwell GPU on vast.ai, build a sparkinfer submission, 
 
 ```
 submission (git ref) ─► build from source ─► correctness gate (token-match / KL vs llama.cpp)
-                     ─► 128-token + 512-context no-regression gates ─► 16k speed score ─► LABEL
+                     ─► 128 / 512 / 4k / 16k guards ─► strongest context speed score ─► LABEL
 ```
 
 The numeric label is a **deterministic function of measurements** (`bench/scripts/label.py`) so
@@ -36,10 +36,11 @@ and cached weights (`/workspace/models`) persist, so the next `--reuse` run star
 `--frontier` = current best tok/s for the scored target · `--ceiling` = roofline/reference display
 value. Reuse mode assumes the weights are cached at `/workspace/models`.
 
-The default eval target is now long-context decode:
-- **128-token decode**: no-regression guard. A PR must keep at least 98% of same-box `origin/main` short-decode speed.
-- **512-context decode**: no-regression guard. A PR must also keep at least 98% of same-box `origin/main` 512-context decode speed.
-- **16k context**: scored frontier. Labels are based on verified 16k speedup over same-box `origin/main`.
+The default eval target is now multi-context decode:
+- **128-token, 512-context, 4k-context, and 16k-context decode** are all no-regression guards. A PR must keep at least 98% of same-box `origin/main` speed at every measured context.
+- The **strongest verified context improvement** becomes the scored target for `eval:<label>`.
+- The bot also applies a UI-only context label (`128-context`, `512-context`, `4k-context`, or `16k-context`) for the context that improved most. This does not change the score.
+- Difficulty compensation uses the selected context's llama.cpp baseline, so late-game improvements past the mature reference get the same multiplier logic at every context.
 
 32k telemetry is disabled by default; set `SPARKINFER_REPORT_REPS=1` only for explicit manual probes.
 

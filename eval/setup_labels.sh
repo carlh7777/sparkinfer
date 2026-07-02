@@ -17,4 +17,12 @@ for k in "${!AC[@]}"; do
   gh label create "area:$k" -R "$REPO" --color "${AC[$k]}" \
      --description "subsystem (emission weight ${AW[$k]})" --force >/dev/null
 done
-echo "eval:* and area:* labels ready on $REPO"
+
+# UI-only: the context where the PR showed its strongest measured improvement. This does not affect
+# the eval score; label.py already computed the reward tier from the selected context.
+declare -A CC=( [128-context]=D14D72 [512-context]=7B5DFF [4k-context]=0E8A16 [16k-context]=B8860B )
+for k in "${!CC[@]}"; do
+  gh label create "$k" -R "$REPO" --color "${CC[$k]}" \
+     --description "UI-only: strongest measured context in sparkinfer eval" --force >/dev/null
+done
+echo "eval:*, area:*, and *-context labels ready on $REPO"

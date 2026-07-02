@@ -199,6 +199,10 @@ def main():
                     help="main/origin 128-token decode tok/s used as the no-regression guard baseline")
     ap.add_argument("--guard-512-baseline", type=float, default=0,
                     help="main/origin 512-context decode tok/s used as the no-regression guard baseline")
+    ap.add_argument("--guard-4k-baseline", type=float, default=0,
+                    help="main/origin 4k-context decode tok/s used as the no-regression guard baseline")
+    ap.add_argument("--guard-16k-baseline", type=float, default=0,
+                    help="main/origin 16k-context decode tok/s used as the no-regression guard baseline")
     ap.add_argument("--guard-2k-baseline", type=float, default=0, help=argparse.SUPPRESS)
     ap.add_argument("--eval-mode", default=os.environ.get("SPARKINFER_EVAL_MODE", "longctx"),
                     choices=["longctx", "short"],
@@ -384,6 +388,8 @@ def main():
               f"SPARKINFER_EVAL_MODE={args.eval_mode} "
               f"SPARKINFER_GUARD_128_BASELINE={args.guard_128_baseline or args.guard_2k_baseline} "
               f"SPARKINFER_GUARD_512_BASELINE={args.guard_512_baseline} "
+              f"SPARKINFER_GUARD_4K_BASELINE={args.guard_4k_baseline} "
+              f"SPARKINFER_GUARD_16K_BASELINE={args.guard_16k_baseline} "
               f"MODELS_DIR=/workspace/models LLAMACPP_DIR={LLAMACPP_DIR} "
               f"bench/scripts/evaluate.sh --ref {args.ref} --frontier {args.frontier} --ceiling {args.ceiling}")
         got_result = False
