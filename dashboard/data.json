@@ -22,7 +22,8 @@
       "color": "#7B5DFF",
       "tokens": 128,
       "sparkinfer_tps": 411.06,
-      "llamacpp_note": "pending llama-batched-bench decode-at-context remeasure"
+      "llamacpp_decode_tps": 342.59,
+      "llamacpp_note": "llama-batched-bench npp=512 ntg=128 npl=1"
     },
     {
       "ctx": 4096,
@@ -30,7 +31,8 @@
       "color": "#0E8A16",
       "tokens": 128,
       "sparkinfer_tps": 196.87,
-      "llamacpp_note": "pending llama-batched-bench decode-at-context remeasure"
+      "llamacpp_decode_tps": 292.99,
+      "llamacpp_note": "llama-batched-bench npp=4096 ntg=128 npl=1"
     },
     {
       "ctx": 16384,
@@ -38,7 +40,8 @@
       "color": "#B8860B",
       "tokens": 128,
       "sparkinfer_tps": 248.64,
-      "llamacpp_note": "pending llama-batched-bench decode-at-context remeasure"
+      "llamacpp_decode_tps": 245.53,
+      "llamacpp_note": "llama-batched-bench npp=16384 ntg=128 npl=1"
     }
   ],
   "passes_gpu": "RTX 5090",
