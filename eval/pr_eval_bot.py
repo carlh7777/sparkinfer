@@ -433,9 +433,29 @@ def record_merge(repo, num):
     idempotent (dedupe by PR). Reads the PR's stored eval from `prs`."""
     data = load_dash()
     if data is None: return
-    if any(m.get("pr") == num for m in data.get("landed", [])): return       # already recorded
     e = next((p for p in data.get("prs", []) if p.get("num") == num), None)
     if not e or e.get("label") not in SPEEDUP_LABELS: return                 # only verified speedups
+    if e.get("eval_mode") == "longctx" and int(e.get("score_context") or 0) == 16384:
+        if any(m.get("pr") == num for m in data.get("landed_longctx", [])): return
+        old_f = round(data["status"].get("longctx_16k_tps") or e.get("frontier_tps") or 0, 2)
+        gain = (e.get("delta_pct") or 0) / 100.0
+        new_f = round(old_f * (1 + gain), 2) if old_f and gain > 0 else round(e.get("tps") or 0, 2)
+        data["status"]["longctx_16k_tps"] = new_f
+        if e.get("ctx_2048_tps") is not None:  data["status"]["longctx_2k_tps"] = round(e["ctx_2048_tps"], 2)
+        if e.get("ctx_32768_tps") is not None: data["status"]["longctx_32k_tps"] = round(e["ctx_32768_tps"], 2)
+        if e.get("top1") is not None: data["status"]["longctx_token_match"] = round(e["top1"], 4)
+        if e.get("kl") is not None:   data["status"]["longctx_kl"] = round(e["kl"], 4)
+        short = re.sub(r"^\w+(\([^)]*\))?:\s*", "", e.get("title", ""))[:28]
+        landed = [m for m in data.get("landed_longctx", []) if m.get("pr") != num]
+        landed.append({"name": short or f"PR #{num}", "tps": new_f, "pr": num,
+                       "ctx": 16384, "date": datetime.date.today().isoformat()})
+        data["landed_longctx"] = sorted(landed, key=lambda m: m["tps"])
+        data["updated"] = datetime.date.today().isoformat()
+        write_dash(data)
+        push_dash(f"dashboard: PR #{num} merged -> 16k frontier {new_f} tok/s")
+        return
+
+    if any(m.get("pr") == num for m in data.get("landed", [])): return       # already recorded
     # Advance by the VERIFIED SAME-BOX RELATIVE GAIN (delta_pct), NOT the raw measured tps. Raw tok/s
     # zig-zags ±2% with whichever box ran (hot vs cool) and breaks the journey's monotonicity; applying
     # the same-box gain to the displayed frontier keeps the headline hardware-independent and the journey
