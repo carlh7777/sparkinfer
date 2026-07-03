@@ -1,7 +1,5 @@
 ![sparkinfer banner](docs/sparkinfer.png)
 
-# SP⚡RKINFER
-
 **Fastest MoE/LLM inference runtime for consumer and edge Blackwell GPUs.**
 
 **SPARKINFER** is a _Blackwell-native_ inference runtime built for **high-speed**, **power-optimized** **local AI** on **NVIDIA RTX 50xx**, **RTX PRO 6000**, **RTX Spark**, and **Jetson Thor**.
