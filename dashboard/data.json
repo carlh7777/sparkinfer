@@ -10,12 +10,13 @@
     "token_match": 0.9612,
     "kl": 0.0175,
     "ref_note": "128-tok decode rerun on current main, same RTX 5090 · Q4_K_M GGUF",
-    "longctx_16k_tps": 310.69,
+    "longctx_16k_tps": 330.2,
     "longctx_2k_tps": 277.78,
-    "longctx_token_match": 0.9538,
-    "longctx_kl": 0.0209,
+    "longctx_token_match": 0.9426,
+    "longctx_kl": 0.0368,
     "longctx_512_tps": 469.58,
-    "longctx_4k_tps": 392.65
+    "longctx_4k_tps": 392.65,
+    "longctx_32k_tps": 260.3
   },
   "context_baselines": [
     {
@@ -50,9 +51,18 @@
       "label": "16k",
       "color": "#B8860B",
       "tokens": 128,
-      "sparkinfer_tps": 310.69,
+      "sparkinfer_tps": 330.2,
       "llamacpp_decode_tps": 245.53,
       "llamacpp_note": "llama-batched-bench npp=16384 ntg=128 npl=1"
+    },
+    {
+      "ctx": 32768,
+      "label": "32k",
+      "color": "#6F42C1",
+      "tokens": 128,
+      "sparkinfer_tps": 260.3,
+      "llamacpp_decode_tps": 192.62,
+      "llamacpp_note": "release-log llama.cpp estimate at 32k, ntg=128"
     }
   ],
   "passes_gpu": "RTX 5090",
@@ -1202,6 +1212,13 @@
       "name": "int8 KV tensor-core GQA flas",
       "tps": 310.69,
       "pr": 195,
+      "ctx": 16384,
+      "date": "2026-07-04"
+    },
+    {
+      "name": "trim int8 mma flash-decode s",
+      "tps": 330.2,
+      "pr": 221,
       "ctx": 16384,
       "date": "2026-07-04"
     },
