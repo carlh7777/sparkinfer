@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-03",
+  "updated": "2026-07-04",
   "status": {
     "gpu": "RTX 5090 · sm_120 · CUDA 13",
     "model": "Qwen3-30B-A3B · Q4_K_M",
@@ -126,6 +126,47 @@
     }
   ],
   "prs": [
+    {
+      "num": 195,
+      "title": "perf(attn): int8 KV tensor-core GQA flash-decode (+19% decode at 16k)",
+      "areas": [
+        "kernels",
+        "runtime"
+      ],
+      "label": "XL",
+      "tps": 308.02,
+      "delta_pct": 16.7,
+      "top1": 0.9538,
+      "kl": 0.0209,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/195",
+      "eval_mode": "longctx",
+      "score_context": 16384,
+      "best_context_label": "16k-context",
+      "context_gains_pct": {
+        "128-context": -0.38,
+        "512-context": -0.25,
+        "4k-context": -0.22,
+        "16k-context": 16.74
+      },
+      "regression_labels": [],
+      "ctx_128_tps": 494.59,
+      "ctx_512_tps": 470.3,
+      "ctx_4096_tps": 392.88,
+      "ctx_16384_tps": 308.02,
+      "guard_128_baseline": 496.49,
+      "guard_128_ratio": 0.9962,
+      "guard_128_pass": true,
+      "guard_512_baseline": 471.5,
+      "guard_512_ratio": 0.9975,
+      "guard_512_pass": true,
+      "guard_4k_baseline": 393.75,
+      "guard_4k_ratio": 0.9978,
+      "guard_4k_pass": true,
+      "guard_16k_baseline": 263.85,
+      "guard_16k_ratio": 1.1674,
+      "guard_16k_pass": true,
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0195-3c81876"
+    },
     {
       "num": 142,
       "title": "perf(decode): pack2 MMVQ for attention Q4_K Wq and O projections",
@@ -968,17 +1009,6 @@
       "tps": 187.96,
       "delta_pct": null,
       "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/43"
-    },
-    {
-      "num": 9,
-      "title": "fix(runtime/gguf): reject malformed metadata arrays instead of desyncing the parse cursor",
-      "areas": [
-        "runtime"
-      ],
-      "label": "none",
-      "tps": 186.36,
-      "delta_pct": null,
-      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/9"
     }
   ],
   "landed": [
