@@ -11,10 +11,10 @@ window.SPARKINFER = {
     "token_match": 0.9612,
     "kl": 0.0175,
     "ref_note": "128-tok decode rerun on current main, same RTX 5090 · Q4_K_M GGUF",
-    "longctx_16k_tps": 266.14,
+    "longctx_16k_tps": 310.69,
     "longctx_2k_tps": 277.78,
-    "longctx_token_match": 0.9898,
-    "longctx_kl": 0.0197,
+    "longctx_token_match": 0.9538,
+    "longctx_kl": 0.0209,
     "longctx_512_tps": 469.58,
     "longctx_4k_tps": 392.65
   },
@@ -51,7 +51,7 @@ window.SPARKINFER = {
       "label": "16k",
       "color": "#B8860B",
       "tokens": 128,
-      "sparkinfer_tps": 266.14,
+      "sparkinfer_tps": 310.69,
       "llamacpp_decode_tps": 245.53,
       "llamacpp_note": "llama-batched-bench npp=16384 ntg=128 npl=1"
     }
@@ -1164,6 +1164,13 @@ window.SPARKINFER = {
       "pr": 130,
       "ctx": 16384,
       "date": "2026-07-02"
+    },
+    {
+      "name": "int8 KV tensor-core GQA flas",
+      "tps": 310.69,
+      "pr": 195,
+      "ctx": 16384,
+      "date": "2026-07-04"
     },
     {
       "name": "Enable GQA split path at 32 ",
