@@ -1345,5 +1345,52 @@ window.SPARKINFER = {
         "gap_to_llama": "5.0x -> 1.74x"
       }
     ]
-  }
+  },
+  "qwen36": {
+    "model": "Qwen3.6-35B-A3B · UD-Q4_K_M",
+    "arch": "hybrid Gated-DeltaNet + full-attn MoE · 256 experts top-8 · head_dim 256",
+    "frontier_tps": 170.84,
+    "baseline_tps": 23.03,
+    "ref_name": "llama.cpp",
+    "ref_tps": 190.0,
+    "token_match": 0.9779,
+    "kl": 0.0183,
+    "note": "scored on 128/512/4k · Qwen3-30B guarded against regression",
+    "ctx": [
+      {
+        "label": "128",
+        "color": "#7B5DFF",
+        "tps": 170.84,
+        "ref_tps": 190.0
+      },
+      {
+        "label": "512",
+        "color": "#0E8A16",
+        "tps": 169.44,
+        "ref_tps": 188.0
+      },
+      {
+        "label": "4k",
+        "color": "#B8860B",
+        "tps": 163.35,
+        "ref_tps": 176.0
+      }
+    ]
+  },
+  "landed_qwen36": [
+    {
+      "name": "baseline · per-expert dequant",
+      "tps": 23.03,
+      "date": "2026-07-04",
+      "baseline": true
+    },
+    {
+      "name": "shared-expert coalesced GEMVs",
+      "tps": 170.84,
+      "pr": 230,
+      "date": "2026-07-05",
+      "label": "XL",
+      "pending": true
+    }
+  ]
 };

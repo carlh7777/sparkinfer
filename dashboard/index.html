@@ -226,8 +226,13 @@
   </section>
 
   <section>
-    <div class="sec-h"><h2>Optimization journey</h2><span class="hint" id="passes-hint"></span></div>
+    <div class="sec-h"><h2>Qwen3-MoE · optimization journey</h2><span class="hint" id="passes-hint"></span></div>
     <div class="card"><div id="passes"></div></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><h2>Qwen3.6 · optimization journey</h2><span class="hint" id="passes36-hint"></span></div>
+    <div class="card"><div id="passes36"></div></div>
   </section>
 
   <section>
@@ -277,13 +282,11 @@
 
   // Optimization-journey chart: recorded passes (history) + live optimizations that have LANDED
   // on the 128-token frontier and guarded long-context frontiers.
-  (function(){
-    const ctxName = ctx => ctx===128 ? "128" : ctx===512 ? "512" : ctx===4096 ? "4k" : ctx===16384 ? "16k" : (ctx ? `${ctx}` : "ctx");
-    const hist = D.passes.map(p=>({name:p.name, sub:p.what, tps:p.tps, live:false}));
-    const live = (D.landed||[]).map(l=>({name:l.name, sub:"PR #"+l.pr+" · "+l.date, tps:l.tps, live:true}));
-    const long = (D.landed_longctx||[]).map(l=>({name:l.name, sub:(l.release?`${l.release} · ${l.author||"ai-hpc"} · `:"PR #"+l.pr+" · ")+ctxName(l.ctx)+" · "+l.date, tps:l.tps, long:true, baseline:!!l.baseline, fixed:!!l.fixed_baseline}));
-    const pts = hist.concat(live, long);
-    $("passes-hint").textContent = `${pts[0].tps} → ${s.frontier_tps} tok/s · 4k ${s.longctx_4k_tps||"—"} · 16k ${s.longctx_16k_tps||"—"} tok/s`;
+  // Reusable optimization-journey bar chart — each scored model (Qwen3-MoE, Qwen3.6) gets its own.
+  const legItem=(c,t)=>`<span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:${c}"></span>${t}</span>`;
+  const legWrap=items=>`<div style="display:flex;gap:18px;justify-content:center;margin-top:12px;font-size:12px;color:var(--body);flex-wrap:wrap">${items}</div>`;
+  function drawJourney(elId, pts, legendHtml){
+    if(!pts.length){ return; }
     const W=760,H=336,padL=12,padR=12,padT=30,padB=106, cw=W-padL-padR, ch=H-padT-padB;
     const maxT=Math.max(...pts.map(p=>p.tps)), slot=cw/pts.length, bw=Math.min(slot*0.56,60);
     const esc=t=>String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -297,7 +300,7 @@
         `<text x="${cx.toFixed(1)}" y="${(padT+ch+14).toFixed(1)}" text-anchor="end" transform="rotate(-45 ${cx.toFixed(1)} ${(padT+ch+14).toFixed(1)})" font-size="10.5" fill="#5b5b66">${esc(trunc(p.name))}</text></g>`;
     }).join("");
     const axis=`<line x1="${padL}" y1="${padT+ch}" x2="${W-padR}" y2="${padT+ch}" stroke="#E7E7EE"/>`;
-    $("passes").innerHTML =
+    document.getElementById(elId).innerHTML =
       `<svg viewBox="-44 0 ${W+44} ${H}" style="width:100%;height:auto;display:block;font-family:Sora,sans-serif" role="img" aria-label="Optimization journey chart">`+
         `<defs>`+
           `<linearGradient id="gHist" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7B5DFF"/><stop offset="1" stop-color="#a78bff"/></linearGradient>`+
@@ -305,14 +308,32 @@
           `<linearGradient id="gLong" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B8860B"/><stop offset="1" stop-color="#E3B341"/></linearGradient>`+
           `<linearGradient id="gPoc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D14D72"/><stop offset="1" stop-color="#F08AA7"/></linearGradient>`+
           `<linearGradient id="gFixed" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6E6E7A"/><stop offset="1" stop-color="#A9A9B4"/></linearGradient>`+
-        `</defs>${axis}${bars}</svg>`+
-      `<div style="display:flex;gap:18px;justify-content:center;margin-top:12px;font-size:12px;color:var(--body)">`+
-        `<span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:#7B5DFF"></span>recorded passes · ${D.passes_gpu}</span>`+
-        `<span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:#0E8A16"></span>landed on frontier · RTX 5090 (live)</span>`+
-        `<span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:#6E6E7A"></span>fixed split before v0.3.3</span>`+
-        `<span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:#D14D72"></span>ai-hpc v0.3.3 long-context POC</span>`+
-        `<span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:#B8860B"></span>landed on context frontier</span>`+
-      `</div>`;
+        `</defs>${axis}${bars}</svg>`+ legendHtml;
+  }
+  // Qwen3-MoE journey — recorded passes + landed 128-tok + landed long-context frontiers.
+  (function(){
+    const ctxName = ctx => ctx===128 ? "128" : ctx===512 ? "512" : ctx===4096 ? "4k" : ctx===16384 ? "16k" : (ctx ? `${ctx}` : "ctx");
+    const hist = D.passes.map(p=>({name:p.name, sub:p.what, tps:p.tps, live:false}));
+    const live = (D.landed||[]).map(l=>({name:l.name, sub:"PR #"+l.pr+" · "+l.date, tps:l.tps, live:true}));
+    const long = (D.landed_longctx||[]).map(l=>({name:l.name, sub:(l.release?`${l.release} · ${l.author||"ai-hpc"} · `:"PR #"+l.pr+" · ")+ctxName(l.ctx)+" · "+l.date, tps:l.tps, long:true, baseline:!!l.baseline, fixed:!!l.fixed_baseline}));
+    const pts = hist.concat(live, long);
+    $("passes-hint").textContent = `${pts[0].tps} → ${s.frontier_tps} tok/s · 4k ${s.longctx_4k_tps||"—"} · 16k ${s.longctx_16k_tps||"—"} tok/s`;
+    drawJourney("passes", pts, legWrap(
+      legItem("#7B5DFF","recorded passes · "+D.passes_gpu)+
+      legItem("#0E8A16","landed on frontier · RTX 5090 (live)")+
+      legItem("#6E6E7A","fixed split before v0.3.3")+
+      legItem("#D14D72","ai-hpc v0.3.3 long-context POC")+
+      legItem("#B8860B","landed on context frontier")));
+  })();
+  // Qwen3.6 journey — its own frontier (hybrid Gated-DeltaNet MoE, scored 128/512/4k).
+  (function(){
+    const q = D.qwen36 || {}; const L = D.landed_qwen36 || [];
+    const pts = L.map(l=>({name:l.name, sub:(l.pr?"PR #"+l.pr+" · ":"")+l.date+(l.label?" · eval:"+l.label:""), tps:l.tps, baseline:!!l.baseline, live:!l.baseline}));
+    const h = $("passes36-hint");
+    if (h && pts.length) h.textContent = `${q.baseline_tps} → ${q.frontier_tps} tok/s · ${((q.frontier_tps/q.ref_tps)*100).toFixed(0)}% of ${q.ref_name} ${q.ref_tps} · top-1 ${(q.token_match*100).toFixed(1)}%`;
+    drawJourney("passes36", pts, legWrap(
+      legItem("#D14D72","baseline · unoptimized main")+
+      legItem("#0E8A16","landed / eval frontier · RTX 5090")));
   })();
 
   const ctxRows = (D.context_baselines||[]).filter(x=>x.sparkinfer_tps && x.llamacpp_decode_tps);
