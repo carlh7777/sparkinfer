@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-05",
+  "updated": "2026-07-06",
   "status": {
     "gpu": "RTX 5090 · sm_120 · CUDA 13",
     "model": "Qwen3-30B-A3B · Q4_K_M",
@@ -136,6 +136,51 @@
     }
   ],
   "prs": [
+    {
+      "num": 234,
+      "title": "perf(qwen3.6): Q8_0 on-read GEMV for dense projections (+8.9% decode, 128/512/4k)",
+      "areas": [
+        "kernels",
+        "runtime"
+      ],
+      "label": "XL",
+      "tps": 187.8,
+      "delta_pct": 708.8,
+      "top1": 0.9558,
+      "kl": 0.0253,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/234",
+      "model": "Qwen3.6-35B-A3B",
+      "eval_mode": "longctx",
+      "score_context": 128,
+      "best_context_label": "128-context",
+      "context_gains_pct": {
+        "128-context": 708.79,
+        "512-context": 704.02,
+        "4k-context": 676.12
+      },
+      "regression_labels": [],
+      "ctx_128_tps": 187.8,
+      "ctx_512_tps": 186.21,
+      "ctx_4096_tps": 178.74,
+      "ctx_16384_tps": 0.0,
+      "ctx_32768_tps": 0.0,
+      "guard_128_baseline": 23.22,
+      "guard_128_ratio": 8.0879,
+      "guard_128_pass": true,
+      "guard_512_baseline": 23.16,
+      "guard_512_ratio": 8.0402,
+      "guard_512_pass": true,
+      "guard_4k_baseline": 23.03,
+      "guard_4k_ratio": 7.7612,
+      "guard_4k_pass": true,
+      "guard_16k_baseline": 0.0,
+      "guard_16k_ratio": 0.0,
+      "guard_16k_pass": true,
+      "guard_32k_baseline": 0.0,
+      "guard_32k_ratio": 0.0,
+      "guard_32k_pass": true,
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0234-511c10e"
+    },
     {
       "num": 229,
       "title": "feat(qwen36): add optimized Gated-DeltaNet AR state update kernel wit…",
@@ -1106,17 +1151,6 @@
       "tps": 240.11,
       "delta_pct": 21.7,
       "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/50"
-    },
-    {
-      "num": 48,
-      "title": "perf(kernels): multi-token register tiling in flash_decode_split (hd=128)",
-      "areas": [
-        "kernels"
-      ],
-      "label": "none",
-      "tps": 185.28,
-      "delta_pct": null,
-      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/48"
     }
   ],
   "landed": [
