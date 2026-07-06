@@ -1637,12 +1637,6 @@ window.SPARKINFER = {
   },
   "landed_qwen36": [
     {
-      "name": "baseline · per-expert dequant",
-      "tps": 23.03,
-      "date": "2026-07-04",
-      "baseline": true
-    },
-    {
       "name": "shared-expert coalesced GEMVs",
       "tps": 170.84,
       "pr": 230,
@@ -1671,7 +1665,7 @@ window.SPARKINFER = {
       "label": "M"
     },
     {
-      "name": "fused QK-norm+RoPE+KV-append",
+      "name": "+15-20% decode — Q8 shared M",
       "tps": 300.16,
       "pr": 266,
       "date": "2026-07-06",
