@@ -159,12 +159,17 @@
         "runtime"
       ],
       "label": "REJECT",
-      "tps": 0,
-      "delta_pct": 0,
+      "tps": 254.72,
+      "delta_pct": 13.1,
       "top1": 0.97,
       "kl": 0.02,
       "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/241",
-      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0241-2aa0768"
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0241-2aa0768",
+      "guard_128_baseline": 225.24,
+      "guard_128_ratio": 1.130882614100515,
+      "ctx_128_tps": 254.72,
+      "ctx_512_tps": 251.87,
+      "ctx_4096_tps": 239.0
     },
     {
       "num": 239,
@@ -1397,30 +1402,30 @@
   "qwen36": {
     "model": "Qwen3.6-35B-A3B · UD-Q4_K_M",
     "arch": "hybrid Gated-DeltaNet + full-attn MoE · 256 experts top-8 · hd256",
-    "frontier_tps": 225.24,
+    "frontier_tps": 254.72,
     "baseline_tps": 23.03,
     "ref_name": "llama.cpp",
     "ref_tps": 275.81,
-    "token_match": 0.9779,
-    "kl": 0.0183,
-    "note": "scored vs same-box main · GDN_FAST default ON · 3-rep median on RTX 5090",
+    "token_match": 0.9801,
+    "kl": 0.0193,
+    "note": "scored vs same-box main · GDN_FAST default ON · #241 merged (split-K bf16 GEMV)",
     "ctx": [
       {
         "label": "128",
         "color": "#7B5DFF",
-        "tps": 225.24,
+        "tps": 254.72,
         "ref_tps": 275.81
       },
       {
         "label": "512",
         "color": "#0E8A16",
-        "tps": 222.86,
+        "tps": 251.87,
         "ref_tps": 275.61
       },
       {
         "label": "4k",
         "color": "#B8860B",
-        "tps": 212.42,
+        "tps": 239.0,
         "ref_tps": 276.3
       }
     ]
@@ -1438,6 +1443,13 @@
       "pr": 230,
       "date": "2026-07-05",
       "label": "XL"
+    },
+    {
+      "name": "split-K bf16 dense GEMV",
+      "tps": 254.72,
+      "pr": 241,
+      "date": "2026-07-06",
+      "label": "L"
     },
     {
       "name": "GDN fast AR state kernel",
