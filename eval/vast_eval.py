@@ -233,6 +233,8 @@ def main():
     ap.add_argument("--no-recreate", action="store_true", help="on reuse failure, error out instead of provisioning a new box")
     ap.add_argument("--pinned", action="store_true", help="the --reuse box is the stable default: NEVER destroy it; on bring-up failure exit PINNED_RETRY_RC for up to REUSE_MAX_RETRIES runs before provisioning a new box (pinned kept)")
     ap.add_argument("--destroy-on-error", action="store_true", help="destroy (not just stop) the instance if the eval produces no result")
+    ap.add_argument("--polaris", action="store_true",
+                    help="generate a Polaris verifiable receipt (unsigned attestation from eval box)")
     args = ap.parse_args()
 
     v = VastAI(); created = False; iid = args.reuse
@@ -470,27 +472,57 @@ def main():
         if args.dual:
             # Dual-model: score Qwen3.6 (primary) + guard Qwen3-30B (no-regression). The existing
             # --guard-*-baseline are the Qwen3-30B guard (G_*); --p-* carry the Qwen3.6 scored target.
-            ev = (f"cd /root/sparkinfer && git fetch -q origin main && git checkout -q origin/main -- bench/scripts && "
-                  f"SI_NO_CHECKOUT=1 SPARKINFER_EVAL_SEED={eval_seed} "
-                  f"SPARKINFER_EVAL_MODE={args.eval_mode} "
-                  f"SPARKINFER_G_GUARD_128_BASELINE={args.guard_128_baseline or args.guard_2k_baseline} "
-                  f"SPARKINFER_G_GUARD_512_BASELINE={args.guard_512_baseline} "
-                  f"SPARKINFER_G_GUARD_4K_BASELINE={args.guard_4k_baseline} "
-                  f"SPARKINFER_G_GUARD_16K_BASELINE={args.guard_16k_baseline} "
-                  f"SPARKINFER_G_GUARD_32K_BASELINE={args.guard_32k_baseline} "
-                  f"SPARKINFER_P_GUARD_128_BASELINE={args.p_guard_128_baseline} "
-                  f"SPARKINFER_P_GUARD_512_BASELINE={args.p_guard_512_baseline} "
-                  f"SPARKINFER_P_GUARD_4K_BASELINE={args.p_guard_4k_baseline} "
-                  f"SPARKINFER_P_GUARD_16K_BASELINE={args.p_guard_16k_baseline} "
-                  f"SPARKINFER_P_GUARD_32K_BASELINE={args.p_guard_32k_baseline} "
-                  f"SPARKINFER_P_LLAMA_128_BASELINE={args.p_llama_128_baseline} "
-                  f"SPARKINFER_P_LLAMA_512_BASELINE={args.p_llama_512_baseline} "
-                  f"SPARKINFER_P_LLAMA_4K_BASELINE={args.p_llama_4k_baseline} "
-                  f"SPARKINFER_P_LLAMA_16K_BASELINE={args.p_llama_16k_baseline} "
-                  f"SPARKINFER_P_LLAMA_32K_BASELINE={args.p_llama_32k_baseline} "
-                  f"MODELS_DIR=/workspace/models LLAMACPP_DIR={LLAMACPP_DIR} "
-                  f"bench/scripts/evaluate_dual.sh --ref {args.ref} "
-                  f"--ceiling {args.ceiling}")
+            if args.polaris:
+                # Polaris: run judge.py which wraps evaluate_dual.sh and produces an unsigned
+                # attestation (POLARIS_ATTESTATION) alongside the normal RESULT_JSON.
+                # Pin eval/polaris/ to origin/main — same trust model as bench/scripts.
+                ev = (f"cd /root/sparkinfer && git fetch -q origin main && "
+                      f"git checkout -q origin/main -- bench/scripts eval/polaris/ && "
+                      f"SI_NO_CHECKOUT=1 SPARKINFER_EVAL_SEED={eval_seed} "
+                      f"SPARKINFER_EVAL_MODE={args.eval_mode} "
+                      f"SPARKINFER_G_GUARD_128_BASELINE={args.guard_128_baseline or args.guard_2k_baseline} "
+                      f"SPARKINFER_G_GUARD_512_BASELINE={args.guard_512_baseline} "
+                      f"SPARKINFER_G_GUARD_4K_BASELINE={args.guard_4k_baseline} "
+                      f"SPARKINFER_G_GUARD_16K_BASELINE={args.guard_16k_baseline} "
+                      f"SPARKINFER_G_GUARD_32K_BASELINE={args.guard_32k_baseline} "
+                      f"SPARKINFER_P_GUARD_128_BASELINE={args.p_guard_128_baseline} "
+                      f"SPARKINFER_P_GUARD_512_BASELINE={args.p_guard_512_baseline} "
+                      f"SPARKINFER_P_GUARD_4K_BASELINE={args.p_guard_4k_baseline} "
+                      f"SPARKINFER_P_GUARD_16K_BASELINE={args.p_guard_16k_baseline} "
+                      f"SPARKINFER_P_GUARD_32K_BASELINE={args.p_guard_32k_baseline} "
+                      f"SPARKINFER_P_LLAMA_128_BASELINE={args.p_llama_128_baseline} "
+                      f"SPARKINFER_P_LLAMA_512_BASELINE={args.p_llama_512_baseline} "
+                      f"SPARKINFER_P_LLAMA_4K_BASELINE={args.p_llama_4k_baseline} "
+                      f"SPARKINFER_P_LLAMA_16K_BASELINE={args.p_llama_16k_baseline} "
+                      f"SPARKINFER_P_LLAMA_32K_BASELINE={args.p_llama_32k_baseline} "
+                      f"MODELS_DIR=/workspace/models LLAMACPP_DIR={LLAMACPP_DIR} "
+                      f"python3 eval/polaris/judge.py --ref {args.ref} "
+                      f"--ceiling {args.ceiling} --script bench/scripts/evaluate_dual.sh "
+                      f"--model-file /workspace/models36/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf "
+                      f"--guard-model-file /workspace/models/Qwen3-30B-A3B-Q4_K_M.gguf "
+                      f"--build-dir /root/sparkinfer/build/runtime")
+            else:
+                ev = (f"cd /root/sparkinfer && git fetch -q origin main && git checkout -q origin/main -- bench/scripts && "
+                      f"SI_NO_CHECKOUT=1 SPARKINFER_EVAL_SEED={eval_seed} "
+                      f"SPARKINFER_EVAL_MODE={args.eval_mode} "
+                      f"SPARKINFER_G_GUARD_128_BASELINE={args.guard_128_baseline or args.guard_2k_baseline} "
+                      f"SPARKINFER_G_GUARD_512_BASELINE={args.guard_512_baseline} "
+                      f"SPARKINFER_G_GUARD_4K_BASELINE={args.guard_4k_baseline} "
+                      f"SPARKINFER_G_GUARD_16K_BASELINE={args.guard_16k_baseline} "
+                      f"SPARKINFER_G_GUARD_32K_BASELINE={args.guard_32k_baseline} "
+                      f"SPARKINFER_P_GUARD_128_BASELINE={args.p_guard_128_baseline} "
+                      f"SPARKINFER_P_GUARD_512_BASELINE={args.p_guard_512_baseline} "
+                      f"SPARKINFER_P_GUARD_4K_BASELINE={args.p_guard_4k_baseline} "
+                      f"SPARKINFER_P_GUARD_16K_BASELINE={args.p_guard_16k_baseline} "
+                      f"SPARKINFER_P_GUARD_32K_BASELINE={args.p_guard_32k_baseline} "
+                      f"SPARKINFER_P_LLAMA_128_BASELINE={args.p_llama_128_baseline} "
+                      f"SPARKINFER_P_LLAMA_512_BASELINE={args.p_llama_512_baseline} "
+                      f"SPARKINFER_P_LLAMA_4K_BASELINE={args.p_llama_4k_baseline} "
+                      f"SPARKINFER_P_LLAMA_16K_BASELINE={args.p_llama_16k_baseline} "
+                      f"SPARKINFER_P_LLAMA_32K_BASELINE={args.p_llama_32k_baseline} "
+                      f"MODELS_DIR=/workspace/models LLAMACPP_DIR={LLAMACPP_DIR} "
+                      f"bench/scripts/evaluate_dual.sh --ref {args.ref} "
+                      f"--ceiling {args.ceiling}")
         else:
             ev = (f"cd /root/sparkinfer && git fetch -q origin main && git checkout -q origin/main -- bench/scripts && "
                   f"SI_NO_CHECKOUT=1 SPARKINFER_EVAL_SEED={eval_seed} SPARKINFER_DIFFICULTY_BOOST=1 "
@@ -511,6 +543,13 @@ def main():
             print("\n=== VERDICT ==="); print(json.dumps(json.loads(line[len("RESULT_JSON "):]), indent=2))
         else:
             print("\n!! no RESULT_JSON; stderr tail:\n" + r.stderr[-1500:])
+
+        # Polaris: parse the unsigned attestation (printed by judge.py on the eval box).
+        # The bot reads it from stdout and signs it with the private key on the bot host.
+        polaris_line = next((l for l in r.stdout.splitlines()
+                             if l.startswith("POLARIS_ATTESTATION ")), None)
+        if polaris_line:
+            print(polaris_line)  # pass through to pr_eval_bot.py stdout
     finally:
         # Default: STOP after every eval — pauses compute billing, keeps disk + weights for fast reuse.
         # --destroy-on-error only destroys if the instance itself is the problem (created fresh but no

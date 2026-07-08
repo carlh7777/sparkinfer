@@ -500,6 +500,34 @@ def upload_eval_log(repo, num, title, oid, res, log_text, baseline):
         print(f">> eval-log upload skipped: {e}")
         return None
 
+def _upload_polaris_receipt(receipt, repo, num, oid):
+    """Upload a signed Polaris receipt to the sparkinfer-log repo alongside the eval log.
+
+    Best-effort: never blocks the eval. Returns the URL to the receipt, or None.
+    """
+    try:
+        rid = f"{int(num):04d}-{oid[:7]}"
+        if not os.path.isdir(os.path.join(LOG_DIR, ".git")):
+            subprocess.run(["git", "clone", "-q", LOG_REPO, LOG_DIR], check=True)
+        else:
+            subprocess.run(["git", "-C", LOG_DIR, "pull", "-q", "--rebase"], check=False)
+        rundir = os.path.join(LOG_DIR, "runs", rid)
+        os.makedirs(rundir, exist_ok=True)
+        receipt_path = os.path.join(rundir, "receipt.json")
+        json.dump(receipt, open(receipt_path, "w"), indent=2)
+        subprocess.run(["git", "-C", LOG_DIR, "add", os.path.join("runs", rid, "receipt.json")],
+                       check=True)
+        subprocess.run(["git", "-C", LOG_DIR, "commit", "-q", "-m",
+                        f"polaris: #{num} {oid[:7]} receipt {receipt.get('receipt_id', '?')[:16]}"],
+                       check=False)
+        subprocess.run(["git", "-C", LOG_DIR, "push", "-q"], check=False)
+        url = f"{LOG_PAGE}{rid}"
+        print(f">> Polaris receipt uploaded to {url}")
+        return url
+    except Exception as e:
+        print(f">> Polaris receipt upload skipped: {e}")
+        return None
+
 def update_dashboard(repo, pr, areas, res, proof_url=None):
     """Upsert the PR's eval verdict into the dashboard TABLE (`prs`) only. The frontier and the
     journey (`landed`) advance only when a PR is actually MERGED — see record_merge() — so the
@@ -513,6 +541,11 @@ def update_dashboard(repo, pr, areas, res, proof_url=None):
              "top1": res.get("top1"), "kl": res.get("kl"),
              "url": f"https://github.com/{repo}/pull/{num}",
              "model": res.get("model", "")}
+    # Polaris receipt links (optional — only present when --polaris is used)
+    if res.get("polaris_receipt_url"):
+        entry["polaris_receipt_url"] = res["polaris_receipt_url"]
+    if res.get("polaris_receipt_hash"):
+        entry["polaris_receipt_hash"] = res["polaris_receipt_hash"]
     for k in ("eval_mode", "score_context", "best_context_label", "context_gains_pct",
               "regression_labels", "auto_close",
               "ctx_128_tps", "ctx_512_tps", "ctx_2048_tps", "ctx_4096_tps",
@@ -803,6 +836,8 @@ def main():
     # not a passed-in frontier number — so the gain is hardware-independent and always current.
     ap.add_argument("--dual", action="store_true",
                     help="score Qwen3.6 (primary) + guard Qwen3-30B (no-regression) via evaluate_dual.sh")
+    ap.add_argument("--polaris", action="store_true",
+                    help="generate a Polaris verifiable receipt for each eval")
     args = ap.parse_args()
     # Qwen3.6 same-box origin/main baselines (128/512/4k). Env-overridable; measured 2026-07 on RTX 5090.
     QWEN36_BASE = {
@@ -813,6 +848,23 @@ def main():
         "llama512": float(os.environ.get("SPARKINFER_QWEN36_LLAMA_512", "275.61")),
         "llama4k":  float(os.environ.get("SPARKINFER_QWEN36_LLAMA_4K",  "276.30")),
     }
+
+    # --- Polaris verifiable compute ---
+    # The private key lives in SPARKINFER_POLARIS_PRIVATE_KEY (base64, 32-byte Ed25519 seed).
+    # It NEVER touches the eval box — the bot signs attestations here on the bot host.
+    POLARIS_PRIVKEY = None
+    if args.polaris:
+        try:
+            import base64 as _b64
+            _key_b64 = os.environ.get("SPARKINFER_POLARIS_PRIVATE_KEY", "")
+            if _key_b64:
+                POLARIS_PRIVKEY = _b64.b64decode(_key_b64)
+                print(f">> Polaris enabled — receipts will be signed")
+            else:
+                print(">> Polaris enabled but SPARKINFER_POLARIS_PRIVATE_KEY not set — "
+                      "attestations will be collected but NOT signed")
+        except Exception as e:
+            print(f">> Polaris key load failed: {e} — attestations will NOT be signed")
 
     dash = load_dash()
     frontier = dash["status"]["frontier_tps"] if dash else args.frontier   # live ledger frontier
@@ -1075,6 +1127,8 @@ def main():
                 "--p-llama-4k-baseline",  str(QWEN36_BASE["llama4k"])]
         if PINNED_INSTANCE and str(cur_iid) == PINNED_INSTANCE:
             cmd.append("--pinned")  # never destroy the pin; retry-then-fallback on bring-up failure
+        if args.polaris:
+            cmd.insert(cmd.index("--keep"), "--polaris")
         pinned = "--pinned" in cmd
         print(f"PR #{num} @ {oid}: evaluating '{ref}' (vs same-box main) on instance "
               f"{cur_iid}{' [pinned]' if pinned else ''} ...")
@@ -1102,6 +1156,28 @@ def main():
         else:
             res = json.loads(line[len("RESULT_JSON "):]); label = res["label"]; body = render(res, oid)
             print(f"PR #{num}: {json.dumps(res)}")
+
+            # --- Polaris: parse unsigned attestation from eval box, sign it, upload receipt ---
+            polaris_line = next((l for l in r.stdout.splitlines()
+                                 if l.startswith("POLARIS_ATTESTATION ")), None)
+            if polaris_line and res:
+                try:
+                    from eval.polaris.receipt import build_receipt
+                    attestation = json.loads(polaris_line[len("POLARIS_ATTESTATION "):])
+                    receipt = build_receipt(attestation, POLARIS_PRIVKEY) if POLARIS_PRIVKEY else None
+                    if receipt:
+                        # Upload receipt to sparkinfer-log repo alongside the eval log
+                        receipt_url = _upload_polaris_receipt(receipt, args.repo, num, oid)
+                        if receipt_url:
+                            res["polaris_receipt_url"] = receipt_url
+                            res["polaris_receipt_hash"] = receipt["receipt_id"][:16]
+                            print(f">> Polaris receipt: {receipt_url}")
+                        else:
+                            print(">> Polaris receipt upload skipped")
+                    else:
+                        print(">> Polaris attestation collected but NOT signed (no private key)")
+                except Exception as e:
+                    print(f">> Polaris receipt failed: {e}")
         if args.dry_run:
             print("--- dry-run, not posting ---\n" + body); continue
         if label:
