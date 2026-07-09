@@ -138,6 +138,69 @@ window.SPARKINFER = {
   ],
   "prs": [
     {
+      "num": 284,
+      "title": "perf(qwen3.6): int8 KV + tensor-core flash-decode for the hd256 full-attn layers (long-context)",
+      "areas": [
+        "kernels",
+        "runtime"
+      ],
+      "label": "M",
+      "tps": 345.7,
+      "delta_pct": 8.0,
+      "top1": 0.9848,
+      "kl": 0.014,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/284",
+      "model": "Qwen3.6-35B-A3B",
+      "eval_mode": "longctx",
+      "score_context": 32768,
+      "best_context_label": "32k-context",
+      "context_gains_pct": {
+        "128-context": 0.14,
+        "512-context": 0.03,
+        "4k-context": 0.12,
+        "16k-context": 3.43,
+        "32k-context": 8.04
+      },
+      "regression_labels": [],
+      "ctx_128_tps": 413.09,
+      "ctx_512_tps": 405.37,
+      "ctx_4096_tps": 389.1,
+      "ctx_16384_tps": 367.97,
+      "ctx_32768_tps": 345.7,
+      "guard_128_baseline": 412.53,
+      "guard_128_ratio": 1.0014,
+      "guard_128_pass": true,
+      "guard_512_baseline": 405.25,
+      "guard_512_ratio": 1.0003,
+      "guard_512_pass": true,
+      "guard_4k_baseline": 388.62,
+      "guard_4k_ratio": 1.0012,
+      "guard_4k_pass": true,
+      "guard_16k_baseline": 355.78,
+      "guard_16k_ratio": 1.0343,
+      "guard_16k_pass": true,
+      "guard_32k_baseline": 319.97,
+      "guard_32k_ratio": 1.0804,
+      "guard_32k_pass": true,
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0284-c78e30f"
+    },
+    {
+      "num": 285,
+      "title": "Opt/gdn conv l2norm",
+      "areas": [
+        "kernels",
+        "runtime"
+      ],
+      "label": "REJECT",
+      "tps": 0,
+      "delta_pct": null,
+      "top1": 0,
+      "kl": 99,
+      "url": "https://github.com/gittensor-ai-lab/sparkinfer/pull/285",
+      "model": "",
+      "proof_url": "https://gittensor-ai-lab.github.io/sparkinfer-log/?run=0285-4681b82"
+    },
+    {
       "num": 283,
       "title": "perf(qwen3.6): fuse Q-gate + O-proj Q8_1 quantize into one launch",
       "areas": [
@@ -1772,42 +1835,42 @@ window.SPARKINFER = {
   "qwen36": {
     "model": "Qwen3.6-35B-A3B · UD-Q4_K_M",
     "arch": "hybrid Gated-DeltaNet + full-attn MoE · 256 experts top-8 · hd256",
-    "frontier_tps": 391.17,
+    "frontier_tps": 413.09,
     "baseline_tps": 23.03,
     "ref_name": "llama.cpp",
     "ref_tps": 275.81,
-    "token_match": 0.9505,
-    "kl": 0.0207,
-    "note": "scored vs same-box main · GDN_FAST default ON · #241 #243 #266 #269 #279 merged",
+    "token_match": 0.9848,
+    "kl": 0.014,
+    "note": "scored vs same-box main · GDN_FAST default ON · #241 #243 #266 #269 #279 #284 merged",
     "ctx": [
       {
         "label": "128",
         "color": "#7B5DFF",
-        "tps": 391.17,
+        "tps": 413.09,
         "ref_tps": 275.81
       },
       {
         "label": "512",
         "color": "#0E8A16",
-        "tps": 384.7,
+        "tps": 405.37,
         "ref_tps": 275.61
       },
       {
         "label": "4k",
         "color": "#B8860B",
-        "tps": 369.78,
+        "tps": 389.1,
         "ref_tps": 276.3
       },
       {
         "label": "16k",
         "color": "#D14D72",
-        "tps": 338.55,
+        "tps": 367.97,
         "ref_tps": 280.66
       },
       {
         "label": "32k",
         "color": "#6F42C1",
-        "tps": 301.19,
+        "tps": 345.7,
         "ref_tps": 279.83
       }
     ]
@@ -1861,6 +1924,13 @@ window.SPARKINFER = {
       "pr": 279,
       "date": "2026-07-07",
       "label": "S"
+    },
+    {
+      "name": "int8 KV + tensor-core hd256 fl",
+      "tps": 345.7,
+      "pr": 284,
+      "date": "2026-07-09",
+      "label": "M"
     }
   ]
 };
