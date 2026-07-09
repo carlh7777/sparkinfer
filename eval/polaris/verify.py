@@ -217,6 +217,8 @@ def main():
     validator = ReceiptValidator(receipt)
     passed, results = validator.verify(public_key_b64=trusted_key)
 
+    is_tdx = receipt.get("attestation_type") == "tdx-quote" or "tdx" in receipt
+
     # Strict checks
     if args.strict:
         strict_issues = verify_strict(receipt, validator)
@@ -224,10 +226,13 @@ def main():
         if any(line.startswith("✗") for line in strict_issues):
             passed = False
 
-    # Trusted key set check
+    # Trusted key set check (Ed25519: public_key; TDX: e2e_pubkey_b64)
     if trusted_key_set:
-        receipt_pub = receipt.get("public_key", "")
-        if receipt_pub not in trusted_key_set:
+        if is_tdx:
+            receipt_pub = receipt.get("tdx", {}).get("e2e_pubkey_b64", "")
+        else:
+            receipt_pub = receipt.get("public_key", "")
+        if receipt_pub and receipt_pub not in trusted_key_set:
             results.append("✗ public key NOT in trusted key set")
             passed = False
 
@@ -235,7 +240,6 @@ def main():
     print()
     rid = receipt.get("receipt_id", "?")[:16]
     ts = receipt.get("attestation", {}).get("timestamp_utc", "?")
-    is_tdx = receipt.get("attestation_type") == "tdx-quote" or "tdx" in receipt
 
     if is_tdx:
         tdx = receipt.get("tdx", {})

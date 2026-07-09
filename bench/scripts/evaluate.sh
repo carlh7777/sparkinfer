@@ -18,6 +18,10 @@ while [ $# -gt 0 ]; do case "$1" in
 esac; shift; done
 [ -z "$GGUF" ] && GGUF="$MODELS_DIR/$MODEL_FILE"
 export LLAMACPP_DIR="${LLAMACPP_DIR:-/workspace/.llamacpp}"   # persist llama.cpp across evals
+# Single-model Qwen3.6 evals must pin the Qwen3.6 GGUF sha (evaluate_dual.sh does this per-model).
+case "$MODEL_FILE" in
+  *Qwen3.6*) MODEL_SHA256="${MODEL_SHA256:-${QWEN36_MODEL_SHA256:-}}" ;;
+esac
 ARCH="$(detect_arch)"
 
 # Self-test convenience: check out the submitted ref. The bot pre-checks-out the submission and

@@ -193,8 +193,8 @@ def build_polaris_receipt(
     Returns:
         Complete TDX receipt dict ready for JSON serialization.
     """
-    tee = polaris_response.get("tee_attestation", {})
-    verification = tee.get("verification", {})
+    tee = polaris_response.get("tee_attestation", {}) or {}
+    verification = polaris_response.get("verification", {}) or tee.get("verification", {}) or {}
 
     # Receipt ID: bind the quote and result together
     id_input = (tee.get("quote_b64", "")[:64] +
@@ -217,12 +217,12 @@ def build_polaris_receipt(
             "e2e_pubkey_b64": tee.get("e2e_pubkey_b64", ""),
             "bound_digest": tee.get("bound_digest", ""),
             "result_sha256": tee.get("result_sha256", ""),
-            "stdout_b64": polaris_response.get("stdout_b64", ""),
-            "files_sha256": tee.get("files_sha256", ""),
+            "stdout_b64": tee.get("stdout_b64", "") or polaris_response.get("stdout_b64", ""),
+            "files_sha256": tee.get("files_sha256", "") or polaris_response.get("files_sha256", ""),
             "workload_sha256": tee.get("workload_sha256", ""),
             "verification": {
-                "intel_verified": verification.get("intel_verified", False),
-                "report_data_match": verification.get("report_data_match", False),
+                "intel_verified": bool(verification.get("intel_verified", False)),
+                "report_data_match": bool(verification.get("report_data_match", False)),
             },
             "cost_usd": polaris_response.get("cost_usd"),
         },
@@ -518,9 +518,19 @@ class ReceiptValidator:
             return False, "signature INVALID"
 
     def verify_hash(self) -> Tuple[bool, str]:
-        """Verify receipt_id matches the computed hash of the attestation."""
-        expected = receipt_id_of(self.attestation)
+        """Verify receipt_id matches the expected binding for this receipt type."""
         actual = self.receipt.get("receipt_id", "")
+        if self.receipt.get("attestation_type") == "tdx-quote" or "tdx" in self.receipt:
+            tee = self.receipt.get("tdx", {})
+            id_input = (tee.get("quote_b64", "")[:64] +
+                        tee.get("result_sha256", "")).encode("utf-8")
+            expected = hashlib.sha256(id_input).hexdigest()[:32]
+            if expected == actual:
+                return True, f"TDX receipt_id OK ({expected[:16]}...)"
+            return False, (
+                f"TDX receipt_id MISMATCH: expected {expected[:16]}..., got {actual[:16]}..."
+            )
+        expected = receipt_id_of(self.attestation)
         if expected == actual:
             return True, f"hash OK ({expected[:16]}...)"
         else:
@@ -582,7 +592,7 @@ class ReceiptValidator:
         gate_results = self._recheck_gates()
         results.extend(gate_results)
 
-        passed = all(line.startswith("✓") for line in results)
+        passed = self._verification_passed(results)
         return passed, results
 
     def verify_tdx(self, public_key_b64: Optional[str] = None) -> Tuple[bool, List[str]]:
@@ -669,7 +679,7 @@ class ReceiptValidator:
         gate_results = self._recheck_gates()
         results.extend(gate_results)
 
-        passed = all(line.startswith("✓") for line in results)
+        passed = self._verification_passed(results)
         return passed, results
 
     def _validate_tdx_schema(self) -> List[str]:
@@ -685,6 +695,20 @@ class ReceiptValidator:
             issues.append("tdx.verification.intel_verified must be a boolean")
 
         return issues
+
+    def _verification_passed(self, results: List[str]) -> bool:
+        """True when cryptographic / schema checks pass.
+
+        Gate re-checks are informational on REJECT verdicts — a failed eval
+        still produces a valid attestation receipt.
+        """
+        reject = self.attestation.get("verdict", {}).get("pass") is False
+        gate_markers = ("correctness gate", "primary guard", "guard model")
+        relevant = [
+            line for line in results
+            if not (reject and any(m in line for m in gate_markers))
+        ]
+        return all(line.startswith("✓") for line in relevant)
 
     def _recheck_gates(self) -> List[str]:
         """Re-check correctness gates from attested measurements."""

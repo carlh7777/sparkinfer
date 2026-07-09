@@ -17,6 +17,8 @@ import argparse, datetime, hashlib, json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from ssh_box import ssh_box_enabled, ssh_box_endpoint, ssh_box_arg, vast_enabled
 
@@ -860,6 +862,10 @@ def main():
                     help="score Qwen3.6 (primary) + guard Qwen3-30B (no-regression) via evaluate_dual.sh")
     ap.add_argument("--polaris", action="store_true",
                     help="generate a Polaris verifiable receipt for each eval")
+    ap.add_argument("--only-pr", type=int, default=0,
+                    help="evaluate only this PR number (must be open)")
+    ap.add_argument("--reeval", action="store_true",
+                    help="re-run eval even if this commit was already graded (use with --only-pr)")
     args = ap.parse_args()
     if not ssh_box_enabled() and not args.instance:
         ap.error("--instance is required for vast.ai transport (or set EVAL_TRANSPORT=ssh + EVAL_SSH_HOST)")
@@ -925,6 +931,10 @@ def main():
     prs = json.loads(gh(["pr", "list", "-R", args.repo, "--state", "open",
                          "--json", "number,headRefName,headRefOid,title,isCrossRepository,labels,isDraft"]).stdout or "[]")
     prs.sort(key=lambda p: p["number"])
+    if args.only_pr:
+        prs = [p for p in prs if p["number"] == args.only_pr]
+        if not prs:
+            print(f"PR #{args.only_pr} not open"); return
     if not prs:
         print("no open PRs"); return
 
@@ -1021,7 +1031,7 @@ def main():
         areas = areas_for_pr(args.repo, num)
         print(f"PR #{num} @ {oid}: areas={sorted(areas) or ['(none)']} ref={ref}")
         if not args.dry_run: apply_area_labels(args.repo, num, areas)
-        if oid in evaluated_commits(args.repo, num):
+        if not args.reeval and oid in evaluated_commits(args.repo, num):
             print(f"PR #{num} @ {oid}: already evaluated — skip eval"); continue
         # Gate 2.5 — copycat penalty: a copycat strike freezes the author's evaluations for
         # PENALTY_DAYS (from the first strike). During the window the bot does NOT greenlight any of

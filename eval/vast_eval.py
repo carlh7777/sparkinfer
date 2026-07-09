@@ -36,6 +36,8 @@ IMAGE   = os.environ.get("EVAL_IMAGE", "nvidia/cuda:12.8.0-devel-ubuntu24.04")  
 # Set EVAL_TEMPLATE_HASH="" to fall back to the raw EVAL_IMAGE + --ssh --direct path.
 TEMPLATE_HASH = os.environ.get("EVAL_TEMPLATE_HASH", "7f806603ccd0de9b7370266673c0a32d")
 SSH_KEY = os.path.expanduser(os.environ.get("SSH_KEY", "~/.ssh/id_ed25519"))
+# Bare-metal SSH boxes often have nvcc outside default PATH (non-interactive ssh).
+BOX_CUDA_ENV = "export PATH=/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:$PATH; "
 LLAMACPP_DIR = os.environ.get("LLAMACPP_DIR", "/workspace/.llamacpp")            # persists across stop/start
 INSTANCE_FILE = os.path.expanduser(os.environ.get("VAST_INSTANCE_FILE", "~/.sparkinfer_vast_instance"))  # self-healed id
 # IPs of hosts that repeatedly hang on image pull or never expose direct SSH, despite high vast
@@ -395,6 +397,7 @@ def main():
         # g++-12: nvcc 12.8 breaks against Ubuntu 24.04's GCC 13.3 libstdc++ (cstdio /__gnu_cxx
         # errors). The build pins CMAKE_CUDA_HOST_COMPILER=g++-12, so it must be present.
         setup = ("export DEBIAN_FRONTEND=noninteractive; "
+                 "git config --global --add safe.directory /root/sparkinfer 2>/dev/null || true; "
                  "(command -v git >/dev/null && command -v cmake >/dev/null && dpkg -s libisl23 >/dev/null 2>&1 && dpkg -s python3-pip >/dev/null 2>&1 && dpkg -s g++-12 >/dev/null 2>&1) "
                  "|| (apt-get update -q && apt-get install -y -q git curl cmake build-essential libisl23 python3-pip gcc-12 g++-12); "
                  "python3 -m pip install -q --break-system-packages huggingface_hub 'huggingface-hub[cli]' tokenizers >/dev/null 2>&1 || true; "
@@ -571,21 +574,24 @@ def main():
                   f"MODELS_DIR=/workspace/models LLAMACPP_DIR={LLAMACPP_DIR} "
                   f"bench/scripts/evaluate.sh --ref {args.ref} --frontier {args.frontier} --ceiling {args.ceiling}")
         got_result = False
+        if bare_metal:
+            ev = BOX_CUDA_ENV + ev
         r = sh(host, port, ev, timeout=10800)
-        sys.stdout.write(r.stdout[-4000:])
         line = next((l for l in r.stdout.splitlines() if l.startswith("RESULT_JSON")), None)
+        polaris_line = next((l for l in r.stdout.splitlines()
+                             if l.startswith("POLARIS_ATTESTATION ")), None)
         got_result = bool(line)
+        # Always emit machine-readable lines from the full SSH capture — the tail below is
+        # for humans only; polaris+judge output can be >>4k and would drop these lines.
+        if line:
+            print(line)
+        if polaris_line:
+            print(polaris_line)
+        sys.stdout.write(r.stdout[-4000:])
         if line:
             print("\n=== VERDICT ==="); print(json.dumps(json.loads(line[len("RESULT_JSON "):]), indent=2))
         else:
             print("\n!! no RESULT_JSON; stderr tail:\n" + r.stderr[-1500:])
-
-        # Polaris: parse the unsigned attestation (printed by judge.py on the eval box).
-        # The bot reads it from stdout and signs it with the private key on the bot host.
-        polaris_line = next((l for l in r.stdout.splitlines()
-                             if l.startswith("POLARIS_ATTESTATION ")), None)
-        if polaris_line:
-            print(polaris_line)  # pass through to pr_eval_bot.py stdout
     finally:
         if bare_metal:
             print(f">> bare-metal box left running (ssh root@{host}:{port})")

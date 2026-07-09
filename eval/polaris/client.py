@@ -16,8 +16,12 @@ import os
 import urllib.request
 import urllib.error
 
-POLARIS_BASE = os.environ.get("POLARIS_API_BASE", "https://api.polaris.computer")
-ATTEST_ENDPOINT = f"{POLARIS_BASE}/v1/attest"
+POLARIS_BASE = os.environ.get("POLARIS_API_BASE", "https://polaris.computer")
+
+
+def _attest_endpoint() -> str:
+    base = os.environ.get("POLARIS_API_BASE", POLARIS_BASE).rstrip("/")
+    return f"{base}/v1/attest"
 
 # The scoring script that runs inside the TDX enclave.
 # Loaded from the sibling scoring.py module.
@@ -57,7 +61,7 @@ class PolarisClient:
         nonce: str = "",
         e2e_pubkey_b64: str = "",
         image: str = "python:3.12-slim",
-        egress: bool = False,
+        egress: str = "none",
     ) -> dict:
         """Submit a workload to Polaris TDX and return the attestation response.
 
@@ -68,7 +72,7 @@ class PolarisClient:
             nonce: Optional nonce bound into the DCAP quote (max 64 bytes).
             e2e_pubkey_b64: Optional end-to-end public key bound into the quote.
             image: Docker image to run (default: python:3.12-slim).
-            egress: Whether to allow network egress from the enclave.
+            egress: Network egress policy for the enclave ("none" or "full").
 
         Returns:
             The full Polaris attestation response dict with keys:
@@ -88,11 +92,12 @@ class PolarisClient:
 
         data = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(
-            ATTEST_ENDPOINT,
+            _attest_endpoint(),
             data=data,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "sparkinfer-eval/1.0",
             },
             method="POST",
         )
