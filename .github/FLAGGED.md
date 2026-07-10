@@ -118,3 +118,7 @@ by earliest PR-*open* time, which inverted the real authorship.
 **Action:** `fansilas` removed from `blocked-contributors.txt`; #221 reopened + un-flagged. Strike
 reassigned to **`jony376`** — #209 labeled `flagged:gaming`/`copycat` + closed, `jony376` added to
 `blocked-contributors.txt`. fansilas's merged record (#195/#122/#86/#83) stands.
+
+## 2026-07-10 — `inference2026` (auto-blocked)
+
+#326 ≥85% copycat of #195 (100%)
