@@ -3,7 +3,8 @@
 #
 #   ./eval/run_bot.sh              # full run on SSH box (or vast if EVAL_TRANSPORT=vast)
 #   ./eval/run_bot.sh --dry-run    # poll PRs + print plan, no GPU eval
-#   ./eval/run_bot.sh --dual       # force dual-model eval (Qwen3.6 + Qwen3-30B guard)
+#   ./eval/run_bot.sh --bidir      # Qwen3.5 + Qwen3.6 bidirectional eval (default)
+#   ./eval/run_bot.sh --triple     # legacy alias for --bidir
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,8 +31,10 @@ BOT_ARGS=(
 if [ "${EVAL_TRANSPORT:-vast}" != "ssh" ]; then
   BOT_ARGS+=(--instance "${VAST_INSTANCE:-42682383}")
 fi
-if [ -n "${DUAL:-}" ] || printf '%s\n' "$@" | grep -qx -- '--dual'; then
-  BOT_ARGS+=(--dual)
+if printf '%s\n' "$@" | grep -qx -- '--bidir' || \
+   [ -n "${BIDIR:-${TRIPLE:-1}}" ] && [ "${BIDIR:-${TRIPLE:-1}}" != "0" ] || \
+   [ -n "${DUAL:-}" ] || printf '%s\n' "$@" | grep -qxE -- '--triple|--dual'; then
+  BOT_ARGS+=(--bidir --primary-quant "${PRIMARY_QUANT:-Q4_K_M}")
 fi
 if [ -n "${POLARIS:-}" ] || printf '%s\n' "$@" | grep -qx -- '--polaris'; then
   BOT_ARGS+=(--polaris)
