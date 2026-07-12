@@ -577,6 +577,9 @@ Q35_CTX_SERIES = {
     512:  {"label": "512", "ref_tps": 225.10},
     4096: {"label": "4k",  "ref_tps": 224.68},
 }
+Q36_CTX_ORDER = ("128", "512", "4k", "16k", "32k")
+# Qwen3.6-35B-A3B llama.cpp decode refs (RTX 5090) — pinned in bench/scripts/reference.lock
+Q36_LLAMA_REF = {128: 275.81, 512: 275.61, 4096: 276.3, 16384: 280.66, 32768: 279.83}
 
 def load_dash():
     try:
@@ -886,6 +889,40 @@ def _upsert_qwen35_ctx(data, sub):
         q35["ctx"] = [ctx_rows[k] for k in ("128", "512", "4k") if k in ctx_rows]
     return changed
 
+def _upsert_qwen36_ctx(data, sub):
+    """Refresh Qwen3.6 per-context sparkinfer bars from a merged bidir score_qwen36 block.
+
+    Uses same-box measured tok/s directly (vs llama.cpp ref anchors). Ratchets up only —
+    same policy as _upsert_qwen35_ctx.
+    """
+    q36 = data.setdefault("qwen36", {})
+    ctx_rows = {r.get("label"): r for r in q36.get("ctx") or []}
+    changed = False
+    for ctx, meta in CTX_SERIES.items():
+        measured = sub.get(meta["metric"])
+        if measured is None:
+            continue
+        new = round(float(measured), 2)
+        label = meta["label"]
+        old = round(float((ctx_rows.get(label) or {}).get("tps") or 0), 2)
+        if old and new < old:
+            continue
+        row = ctx_rows.get(label)
+        if row:
+            if old != new:
+                row["tps"] = new
+                row["color"] = meta["color"]
+                changed = True
+        else:
+            ctx_rows[label] = {
+                "label": label, "color": meta["color"],
+                "tps": new, "ref_tps": Q36_LLAMA_REF.get(ctx, meta["llama"]),
+            }
+            changed = True
+    if changed:
+        q36["ctx"] = [ctx_rows[k] for k in Q36_CTX_ORDER if k in ctx_rows]
+    return changed
+
 def record_merge(repo, num):
     """A frontier-advancing PR was MERGED → advance the displayed frontier by its verified same-box
     relative gain and add it to the journey (`landed`). Hardware-independent and merged-only;
@@ -910,6 +947,7 @@ def record_merge(repo, num):
             q36["frontier_tps"] = new_f
             if sub.get("top1") is not None: q36["token_match"] = round(sub["top1"], 4)
             if sub.get("kl") is not None:   q36["kl"] = round(sub["kl"], 4)
+            _upsert_qwen36_ctx(data, sub)
             short = re.sub(r"^\w+(\([^)]*\))?:\s*", "", e.get("title", ""))[:28]
             landed = [m for m in data.get("landed_qwen36", []) if m.get("pr") != num and not m.get("baseline")]
             landed.append({"name": short or f"PR #{num}", "tps": new_f, "pr": num,

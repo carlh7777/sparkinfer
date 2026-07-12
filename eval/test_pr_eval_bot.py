@@ -173,6 +173,34 @@ class PrEvalBotPolicyTest(unittest.TestCase):
         by2 = {r["label"]: r["tps"] for r in data["qwen35"]["ctx"]}
         self.assertEqual(by2, by)
 
+    def test_qwen36_ctx_uses_measured_tps_without_scaling(self):
+        data = {
+            "qwen36": {
+                "frontier_tps": 372.04,
+                "ctx": [
+                    {"label": "128", "tps": 423.77, "ref_tps": 275.81},
+                    {"label": "512", "tps": 420.23, "ref_tps": 275.61},
+                    {"label": "4k", "tps": 403.22, "ref_tps": 276.3},
+                    {"label": "16k", "tps": 378.74, "ref_tps": 280.66},
+                    {"label": "32k", "tps": 372.04, "ref_tps": 279.83},
+                ],
+            }
+        }
+        sub = {
+            "ctx_128_tps": 411.95,
+            "ctx_512_tps": 418.05,
+            "ctx_4096_tps": 402.52,
+            "ctx_16384_tps": 398.58,
+            "ctx_32768_tps": 382.25,
+        }
+        bot._upsert_qwen36_ctx(data, sub)
+        by = {r["label"]: r["tps"] for r in data["qwen36"]["ctx"]}
+        self.assertEqual(by["128"], 423.77)
+        self.assertEqual(by["512"], 420.23)
+        self.assertEqual(by["4k"], 403.22)
+        self.assertEqual(by["16k"], 398.58)
+        self.assertEqual(by["32k"], 382.25)
+
     def test_polaris_tdx_falls_back_to_ed25519(self):
         from eval.polaris.receipt import generate_keypair, verify_attestation
 
